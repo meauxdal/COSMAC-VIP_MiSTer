@@ -1,10 +1,12 @@
-// RCA VP-590 Color Board: CDP1862 color generator and CDP1822 color RAM (256 x 3).
-// Color RAM is write-only at C000-DFFF. A write at D000-DFFF gives one cell per display
-// byte (8 x 32); C000-CFFF ignores A3/A4 (8 x 8 cells). The last write selects the mode.
-// Color bits: 0 = R, 1 = B, 2 = G. OUT 5 steps the background: blue, black, green, red.
-// Dots stay white until the first color RAM write (CON); the background shows only
-// while the display is on and color is on.
-// TODO: the VP-590 clocks the CPU at 1.7897725 MHz (7.15909 MHz / 4); core keeps 1.76064 MHz.
+// RCA VP-590 Color Board: CDP1862 color generator, CDP1822 color RAM (256 x 3).
+// Color RAM is write-only at C000-DFFF. A write at D000-DFFF gives one cell per
+// display byte (8 x 32); C000-CFFF ignores A3/A4 (8 x 8 cells). The last write
+// selects the mode. Color bits: 0 = R, 1 = B, 2 = G. OUT 5 steps the
+// background: blue, black, green, red. Dots stay white until the first color
+// RAM write (CON); the background shows only while the display and color are
+// on.
+// TODO: the VP-590 clocks the CPU at 1.7897725 MHz (7.15909 MHz / 4); the core
+// keeps 1.76064 MHz.
 // TODO: VP-580 keypad jacks (latch on OUT 2, J1 on EF3, J2 on EF4).
 
 module vp590
