@@ -224,7 +224,7 @@ vip_core vip_core
 ///////////////////////   VIDEO   ////////////////////////////////
 
 assign CLK_VIDEO = clk_sys;
-assign CE_PIXEL  = ce_cpu;
+assign CE_PIXEL  = &ce_div[1:0];   // 4 samples per 1861 dot: ascal shows nothing with the bare 1-per-16-clocks dot rate
 
 assign VGA_DE = ~(hblank | vblank);
 assign VGA_HS = hsync;
