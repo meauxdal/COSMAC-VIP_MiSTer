@@ -42,3 +42,4 @@ c5_pin_model_dump.txt
 refs/
 sim/obj_dir
 sim/*.pgm
+/local
