@@ -12,13 +12,14 @@
 
 static Vvip_core *top;
 static uint64_t ticks;
+static unsigned cediv = 2;           // env CEDIV: clocks per ce (hardware uses 16)
 
 static void tick()
 {
 	top->clk = 0; top->eval();
 	top->clk = 1; top->eval();
 	ticks++;
-	top->ce = (ticks & 1) == 0;
+	top->ce = (ticks % cediv) == 0;
 }
 
 static std::vector<uint8_t> load(const char *path)
@@ -50,6 +51,7 @@ int main(int argc, char **argv)
 {
 	Verilated::commandArgs(argc, argv);
 	top = new Vvip_core;
+	if (getenv("CEDIV")) cediv = atoi(getenv("CEDIV"));
 
 	const char *rom = nullptr, *interp = nullptr, *ch8 = nullptr, *bin = nullptr, *out = "frame.pgm";
 	unsigned keys = 0;

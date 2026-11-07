@@ -59,6 +59,7 @@ localparam CONF_STR = {
 	"-;",
 	"P1,System;",
 	"P1O[1],RAM,4K,2K;",
+	"P1O[2],Reset enters,Monitor (hold C),Program in RAM;",
 	"P1F3,ROM,Load Monitor ROM;",
 	"-;",
 	"T[0],Reset;",
@@ -153,6 +154,18 @@ always @(posedge clk_sys) begin
 	end
 end
 
+// The VIP enters the monitor only if key C is held when RUN goes up. The OSD swallows
+// keys, so by default hold C for ~0.25 s after each reset; skip it after a CH8/BIN load,
+// which should start the program like a real VIP reset without C.
+wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02);
+reg [18:0] hold_c = 0;
+always @(posedge clk_sys) begin
+	if (reset) hold_c <= (status[2] || ld_prog) ? 19'd0 : 19'h7FFFF;
+	else if (ce_cpu && hold_c) hold_c <= hold_c - 1'd1;
+end
+
+wire [15:0] keys = keypad | {3'b000, |hold_c, 12'h000};
+
 ///////////////////////   CORE   /////////////////////////////////
 
 wire        q;
@@ -173,7 +186,7 @@ vip_core vip_core
 	.ioctl_addr(ioctl_addr[15:0]),
 	.ioctl_dout(ioctl_dout),
 
-	.keypad(keypad),
+	.keypad(keys),
 
 	.exp_ma(),
 	.exp_tpa(),
@@ -217,7 +230,7 @@ assign VGA_DE = ~(hblank | vblank);
 assign VGA_HS = hsync;
 assign VGA_VS = vsync;
 assign VGA_R  = {8{pixel}};
-assign VGA_G  = {8{pixel}};
+assign VGA_G  = pixel ? 8'hFF : 8'h20;   // DEBUG: dark green background, revert to {8{pixel}}
 assign VGA_B  = {8{pixel}};
 
 ///////////////////////   AUDIO   ////////////////////////////////
