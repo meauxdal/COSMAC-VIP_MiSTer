@@ -212,34 +212,8 @@ cdp1861 pixie
 	.hsync(hsync),
 	.vsync(vsync),
 	.hblank(hblank),
-	.vblank(vblank),
-	.dbg(dbg),
-	.dbg_en(dbg_en)
+	.vblank(vblank)
 );
-
-// DEBUG (temporary): state snapshot drawn by the 1861 on lines 40-55
-wire        dbg_en;
-reg  [15:0] dbg_rom_cnt = 0, dbg_tpa_cnt = 0;
-reg  [7:0]  dbg_idx = 8'hEE, dbg_rom0 = 8'hEE;
-always @(posedge clk) begin
-	if (ioctl_download && ioctl_wr && ld_rom) begin
-		dbg_rom_cnt <= dbg_rom_cnt + 1'd1;
-		if (ioctl_addr == 0) dbg_rom0 <= ioctl_dout;
-	end
-	if (ioctl_download) dbg_idx <= ioctl_index;
-	if (ce && tpa) dbg_tpa_cnt <= dbg_tpa_cnt + 1'd1;
-end
-wire [127:0] dbg = {
-	16'hA5C3,                                                        // w7 marker
-	{key_latch, 4'h0, out_port},                                     // w6
-	{bus, rom_q},                                                    // w5
-	dbg_tpa_cnt,                                                     // w4
-	{run, u6a, u6b, dbg_en, int_n, dmao_n, efx_n, ef_n[3],
-	 keypad[12], q, mrd_n, mwr_n, sc, 2'b00},                        // w3
-	{dbg_idx, dbg_rom0},                                             // w2
-	dbg_rom_cnt,                                                     // w1
-	{4'h0, addr}                                                     // w0
-};
 
 ///////////////////////   TONE   /////////////////////////////////
 

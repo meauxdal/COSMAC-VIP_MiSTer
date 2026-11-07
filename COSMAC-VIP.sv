@@ -224,13 +224,13 @@ vip_core vip_core
 ///////////////////////   VIDEO   ////////////////////////////////
 
 assign CLK_VIDEO = clk_sys;
-assign CE_PIXEL  = &ce_div[1:0];   // 4 samples per 1861 dot: ascal shows nothing with the bare 1-per-16-clocks dot rate
+assign CE_PIXEL  = &ce_div[1:0];   // 4 samples per 1861 dot (384 px line, like StudioII); the bare dot rate (96 px) was never tested on hardware
 
 assign VGA_DE = ~(hblank | vblank);
 assign VGA_HS = hsync;
 assign VGA_VS = vsync;
 assign VGA_R  = {8{pixel}};
-assign VGA_G  = pixel ? 8'hFF : 8'h20;   // DEBUG: dark green background, revert to {8{pixel}}
+assign VGA_G  = {8{pixel}};
 assign VGA_B  = {8{pixel}};
 
 ///////////////////////   AUDIO   ////////////////////////////////

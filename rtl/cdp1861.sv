@@ -27,13 +27,8 @@ module cdp1861
 	output reg       hsync,
 	output reg       vsync,
 	output reg       hblank,
-	output reg       vblank,
-
-	input    [127:0] dbg,         // DEBUG: 8 words drawn on lines 40-55, remove later
-	output           dbg_en
+	output reg       vblank
 );
-
-assign dbg_en = enabled;
 
 localparam LINES       = 262;
 localparam DISP_START  = 80;
@@ -86,17 +81,9 @@ assign dmao_n = !(enabled && disp_line && cyc >= 1 && cyc <= 12 && dcnt < 8);
 wire [6:0] hpos = {cyc, ph};
 wire [2:0] bidx = cyc[2:0] - 3'd5;
 
-// DEBUG overlay: word k on lines 40+2k..41+2k, bit 15 first, 4 dots per bit (3 lit)
-reg  [127:0] dbg_q;
-wire [8:0]   dbg_l   = line - 9'd40;
-wire [6:0]   dbg_x   = hpos - 7'd40;
-wire         dbg_row = line >= 40 && line < 56 && hpos >= 40 && hpos < 104;
-wire         dbg_dot = dbg_row && dbg_x[1:0] != 2'd3 && dbg_q[{dbg_l[3:1], 4'd15 - dbg_x[5:2]}];
-
 always @(posedge clk) begin
 	if (ce) begin
-		if (line == 0 && hpos == 0) dbg_q <= dbg;
-		video  <= dbg_dot || (enabled && disp_line && cyc >= 5 && cyc <= 12 && lbuf[bidx][3'd7 - ph]);
+		video  <= enabled && disp_line && cyc >= 5 && cyc <= 12 && lbuf[bidx][3'd7 - ph];
 		hblank <= hpos >= 8 && hpos < 24;
 		hsync  <= hpos >= 12 && hpos < 20;
 		if (hpos == 8) begin
