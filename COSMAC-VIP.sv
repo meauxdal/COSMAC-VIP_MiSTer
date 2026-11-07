@@ -114,9 +114,31 @@ pll pll
 	.outclk_0(clk_sys)
 );
 
-reg [3:0] ce_div = 0;
-always @(posedge clk_sys) ce_div <= ce_div + 1'd1;
-wire ce_cpu = &ce_div;
+// The pixel enable runs at 4x the CPU clock. A fractional accumulator sets the
+// rate: 3.52128 MHz / 2 on a plain VIP (exactly every 4th clk_sys, as before),
+// 7.15909 MHz / 4 = 1.7897725 MHz with the VP-590, whose 1862 drives the bus
+// CLOCK line. Increments are 4 * f_cpu / clk_sys over the modulus 2817024.
+localparam [21:0] CE_MOD     = 22'd2817024;
+localparam [21:0] CE_INC_VIP = 22'd704256;   // 1.76064 MHz
+localparam [21:0] CE_INC_590 = 22'd715909;   // 1.7897725 MHz
+
+reg  [21:0] ce_acc = 0;
+reg   [1:0] ce_div = 0;
+reg         ce_pix = 0;
+wire [21:0] ce_inc  = status[3] ? CE_INC_590 : CE_INC_VIP;
+wire [22:0] ce_next = ce_acc + ce_inc;
+
+always @(posedge clk_sys) begin
+	ce_pix <= 0;
+	if (ce_next >= CE_MOD) begin
+		ce_acc <= ce_next - CE_MOD;
+		ce_pix <= 1;
+	end
+	else ce_acc <= ce_next[21:0];
+	if (ce_pix) ce_div <= ce_div + 1'd1;
+end
+
+wire ce_cpu = ce_pix && &ce_div;
 
 // RUN switch down while any reset source is active
 wire reset = RESET | status[0] | buttons[1] | ioctl_download;
@@ -266,7 +288,7 @@ wire [7:0] col_on = col_bg ? 8'h80 : 8'hFF;
 wire [2:0] rgb    = color_board ? col_rgb : {3{pixel}};
 
 assign CLK_VIDEO = clk_sys;
-assign CE_PIXEL  = &ce_div[1:0];   // 4 samples per 1861 dot (384 px line, like StudioII); the bare dot rate (96 px) was never tested on hardware
+assign CE_PIXEL  = ce_pix;   // 4 samples per 1861 dot (384 px line, like StudioII); the bare dot rate (96 px) was never tested on hardware
 
 assign VGA_DE = ~(hblank | vblank);
 assign VGA_HS = hsync;
