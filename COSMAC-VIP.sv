@@ -47,7 +47,7 @@ wire [1:0] ar = status[122:121];
 assign VIDEO_ARX = (!ar) ? 12'd4 : (ar - 1'd1);
 assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 
-// ioctl indexes: boot0.rom = 0x00 (monitor), boot1.rom = 0x40 (CHIP-8 interpreter), F1 = 1, F2 = 2
+// ioctl indexes: boot0.rom = 0x00 (monitor), boot1.rom = 0x40 (CHIP-8 interpreter), F1 = 1, F2 = 2, monitor = 3
 `include "build_id.v"
 localparam CONF_STR = {
 	"COSMAC-VIP;;",
@@ -56,7 +56,10 @@ localparam CONF_STR = {
 	"F2,BIN,Load Binary;",
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"O[1],RAM,4K,2K;",
+	"-;",
+	"P1,System;",
+	"P1O[1],RAM,4K,2K;",
+	"P1F3,ROM,Load Monitor ROM;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -152,10 +155,10 @@ end
 
 ///////////////////////   CORE   /////////////////////////////////
 
-wire       q;
-wire       pixel;
-wire       hsync, vsync, hblank, vblank;
-wire [7:0] audio;
+wire        q;
+wire        pixel;
+wire        hsync, vsync, hblank, vblank;
+wire signed [7:0] audio;
 
 vip_core vip_core
 (
@@ -171,6 +174,29 @@ vip_core vip_core
 	.ioctl_dout(ioctl_dout),
 
 	.keypad(keypad),
+
+	.exp_ma(),
+	.exp_tpa(),
+	.exp_tpb(),
+	.exp_mrd_n(),
+	.exp_mwr_n(),
+	.exp_bus(),
+	.exp_n(),
+	.exp_sc(),
+	.exp_run(),
+	.exp_cs(),
+	.exp_cdef_n(),
+	.exp_bus_in(8'hFF),
+	.exp_bus_oe(1'b0),
+	.exp_indis(1'b0),
+	.exp_int_n(1'b1),
+	.exp_dma_in_n(1'b1),
+	.exp_dma_out_n(1'b1),
+	.exp_ef_n(4'hF),
+
+	.io_out(),
+	.io_in(8'h00),
+	.io_inst(1'b0),
 
 	.q(q),
 	.audio(audio),
@@ -196,10 +222,10 @@ assign VGA_B  = {8{pixel}};
 
 ///////////////////////   AUDIO   ////////////////////////////////
 
-assign AUDIO_S   = 0;
+assign AUDIO_S   = 1;
 assign AUDIO_MIX = 0;
-assign AUDIO_L   = {audio, audio};
-assign AUDIO_R   = {audio, audio};
+assign AUDIO_L   = {audio, 8'd0};
+assign AUDIO_R   = {audio, 8'd0};
 
 assign LED_USER = q;
 

@@ -40,3 +40,5 @@ c5_pin_model_dump.txt
 **/.DS_Store
 # Local reference material (large scans), not distributed
 refs/
+sim/obj_dir
+sim/*.pgm
