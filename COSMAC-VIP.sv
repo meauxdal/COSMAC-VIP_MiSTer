@@ -59,6 +59,7 @@ localparam CONF_STR = {
 	"-;",
 	"P1,System;",
 	"P1O[1],RAM,4K,2K;",
+	"P1O[3],Color board,None,VP-590;",
 	"P1O[2],Reset enters,Monitor (hold C),Program in RAM;",
 	"P1F3,ROM,Load Monitor ROM;",
 	"-;",
@@ -170,6 +171,11 @@ wire [15:0] keys = keypad | {3'b000, |hold_c, 12'h000};
 
 wire        q;
 wire        pixel;
+wire        vid_dma_stb, vid_disp_en;
+wire  [2:0] vid_dma_idx, vid_dot_idx;
+wire  [7:0] exp_ma, exp_bus;
+wire  [2:0] exp_n;
+wire        exp_tpa, exp_tpb, exp_mrd_n, exp_mwr_n, exp_run;
 wire        hsync, vsync, hblank, vblank;
 wire signed [7:0] audio;
 
@@ -188,15 +194,15 @@ vip_core vip_core
 
 	.keypad(keys),
 
-	.exp_ma(),
-	.exp_tpa(),
-	.exp_tpb(),
-	.exp_mrd_n(),
-	.exp_mwr_n(),
-	.exp_bus(),
-	.exp_n(),
+	.exp_ma(exp_ma),
+	.exp_tpa(exp_tpa),
+	.exp_tpb(exp_tpb),
+	.exp_mrd_n(exp_mrd_n),
+	.exp_mwr_n(exp_mwr_n),
+	.exp_bus(exp_bus),
+	.exp_n(exp_n),
 	.exp_sc(),
-	.exp_run(),
+	.exp_run(exp_run),
 	.exp_cs(),
 	.exp_cdef_n(),
 	.exp_bus_in(8'hFF),
@@ -215,13 +221,49 @@ vip_core vip_core
 	.audio(audio),
 
 	.pixel(pixel),
+	.vid_dma_stb(vid_dma_stb),
+	.vid_dma_idx(vid_dma_idx),
+	.vid_dot_idx(vid_dot_idx),
+	.vid_disp_en(vid_disp_en),
 	.hsync(hsync),
 	.vsync(vsync),
 	.hblank(hblank),
 	.vblank(vblank)
 );
 
+///////////////////////   VP-590   ///////////////////////////////
+
+wire       color_board = status[3];
+wire [2:0] col_rgb;
+wire       col_bg;
+
+vp590 vp590
+(
+	.clk(clk_sys),
+	.ce(ce_cpu),
+	.reset(!exp_run),
+	.ma(exp_ma),
+	.tpa(exp_tpa),
+	.tpb(exp_tpb),
+	.mrd_n(exp_mrd_n),
+	.mwr_n(exp_mwr_n),
+	.bus(exp_bus),
+	.n(exp_n),
+	.dma_stb(vid_dma_stb),
+	.dma_idx(vid_dma_idx),
+	.dot_idx(vid_dot_idx),
+	.disp_en(vid_disp_en),
+	.luma(pixel),
+	.blank(hblank | vblank),
+	.rgb(col_rgb),
+	.bckgnd(col_bg)
+);
+
 ///////////////////////   VIDEO   ////////////////////////////////
+
+// Background channels at reduced luminance (0x80), as in StudioII
+wire [7:0] col_on = col_bg ? 8'h80 : 8'hFF;
+wire [2:0] rgb    = color_board ? col_rgb : {3{pixel}};
 
 assign CLK_VIDEO = clk_sys;
 assign CE_PIXEL  = &ce_div[1:0];   // 4 samples per 1861 dot (384 px line, like StudioII); the bare dot rate (96 px) was never tested on hardware
@@ -229,9 +271,9 @@ assign CE_PIXEL  = &ce_div[1:0];   // 4 samples per 1861 dot (384 px line, like 
 assign VGA_DE = ~(hblank | vblank);
 assign VGA_HS = hsync;
 assign VGA_VS = vsync;
-assign VGA_R  = {8{pixel}};
-assign VGA_G  = {8{pixel}};
-assign VGA_B  = {8{pixel}};
+assign VGA_R  = rgb[2] ? col_on : 8'h00;
+assign VGA_G  = rgb[1] ? col_on : 8'h00;
+assign VGA_B  = rgb[0] ? col_on : 8'h00;
 
 ///////////////////////   AUDIO   ////////////////////////////////
 

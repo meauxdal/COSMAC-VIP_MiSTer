@@ -46,6 +46,10 @@ module vip_core
 	output signed [7:0] audio,
 
 	output        pixel,
+	output        vid_dma_stb,    // 1861 line buffer slots, for a color board
+	output  [2:0] vid_dma_idx,
+	output  [2:0] vid_dot_idx,
+	output        vid_disp_en,
 	output        hsync,
 	output        vsync,
 	output        hblank,
@@ -208,6 +212,10 @@ cdp1861 pixie
 	.int_n(int_n),
 	.dmao_n(dmao_n),
 	.efx_n(efx_n),
+	.dma_stb(vid_dma_stb),
+	.dma_idx(vid_dma_idx),
+	.dot_idx(vid_dot_idx),
+	.disp_en(vid_disp_en),
 	.video(pixel),
 	.hsync(hsync),
 	.vsync(vsync),

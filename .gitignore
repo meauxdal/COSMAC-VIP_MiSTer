@@ -43,3 +43,5 @@ refs/
 sim/obj_dir
 sim/*.pgm
 /local
+# Reference emulators (Emma 02, MAME), not distributed
+/emu

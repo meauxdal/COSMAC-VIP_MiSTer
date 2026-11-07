@@ -23,6 +23,12 @@ module cdp1861
 	output           dmao_n,
 	output           efx_n,       // DISP STATUS
 
+	// Line buffer slots, so a color board can keep per-byte data in step
+	output           dma_stb,     // byte dma_idx is loaded this cycle
+	output     [2:0] dma_idx,
+	output     [2:0] dot_idx,     // byte sampled into video this cycle
+	output           disp_en,
+
 	output reg       video,
 	output reg       hsync,
 	output reg       vsync,
@@ -44,6 +50,9 @@ reg  [7:0] lbuf[8];
 wire disp_line = line >= DISP_START && line < DISP_END;
 wire dma_cyc   = tpb && sc == 2'd2;
 
+assign dma_stb = dma_cyc && enabled && disp_line && dcnt < 8;
+assign dma_idx = dcnt[2:0];
+
 always @(posedge clk) begin
 	if (reset) begin
 		ph <= 0; cyc <= 0; line <= 0;
@@ -64,7 +73,7 @@ always @(posedge clk) begin
 			if (disp_off) enabled <= 0;
 		end
 
-		if (dma_cyc && enabled && disp_line && dcnt < 8) begin
+		if (dma_stb) begin
 			lbuf[dcnt[2:0]] <= bus;
 			dcnt <= dcnt + 1'd1;
 		end
@@ -80,6 +89,9 @@ assign dmao_n = !(enabled && disp_line && cyc >= 1 && cyc <= 12 && dcnt < 8);
 // at the start of horizontal blanking.
 wire [6:0] hpos = {cyc, ph};
 wire [2:0] bidx = cyc[2:0] - 3'd5;
+
+assign dot_idx = bidx;
+assign disp_en = enabled;
 
 always @(posedge clk) begin
 	if (ce) begin
