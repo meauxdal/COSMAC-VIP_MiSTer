@@ -53,7 +53,9 @@ module vip_core
 	output        hsync,
 	output        vsync,
 	output        hblank,
-	output        vblank
+	output        vblank,
+	output        win_hblank,
+	output        win_vblank
 );
 
 ///////////////////////   LOADER   ///////////////////////////////
@@ -220,7 +222,9 @@ cdp1861 pixie
 	.hsync(hsync),
 	.vsync(vsync),
 	.hblank(hblank),
-	.vblank(vblank)
+	.vblank(vblank),
+	.win_hblank(win_hblank),
+	.win_vblank(win_vblank)
 );
 
 ///////////////////////   TONE   /////////////////////////////////

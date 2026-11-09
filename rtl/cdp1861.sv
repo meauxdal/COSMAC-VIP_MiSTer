@@ -33,7 +33,9 @@ module cdp1861
 	output reg       hsync,
 	output reg       vsync,
 	output reg       hblank,
-	output reg       vblank
+	output reg       vblank,
+	output reg       win_hblank,  // blanking around the 64x128 bitmap window
+	output reg       win_vblank
 );
 
 localparam LINES       = 262;
@@ -98,9 +100,11 @@ always @(posedge clk) begin
 		video  <= enabled && disp_line && cyc >= 5 && cyc <= 12 && lbuf[bidx][3'd7 - ph];
 		hblank <= hpos >= 8 && hpos < 24;
 		hsync  <= hpos >= 12 && hpos < 20;
+		win_hblank <= cyc < 5 || cyc > 12;
 		if (hpos == 8) begin
 			vblank <= line < 32 || line >= 256;
 			vsync  <= line >= 4 && line < 8;
+			win_vblank <= !disp_line;
 		end
 	end
 end

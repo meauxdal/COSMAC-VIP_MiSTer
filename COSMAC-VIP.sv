@@ -42,11 +42,6 @@ assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
 
-wire [1:0] ar = status[122:121];
-
-assign VIDEO_ARX = (!ar) ? 12'd4 : (ar - 1'd1);
-assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
-
 // ioctl indexes: boot0.rom = 0x00 (monitor), boot1.rom = 0x40 (CHIP-8 interpreter), F1 = 1, F2 = 2, monitor = 3
 `include "build_id.v"
 // OSD lines are 28 chars wide, options include a colon, so 27
@@ -62,6 +57,11 @@ localparam CONF_STR = {
 
 	// === AUDIO & VIDEO ===
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
+	"O[8:7],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
+	"O[6],Borders,Show,Hide;",
+	"d0O[9],Vertical crop,Off,216p (5x);",
+	"d0O[13:10],Crop offset,0,1,2,3,4,-4,-3,-2,-1;",
+	"D1O[15:14],B/W palette,White,Amber,Green,Inverted;",
 	"-;",
 
 	// === SYSTEM ===
@@ -81,6 +81,7 @@ localparam CONF_STR = {
 };
 
 wire         forced_scandoubler;
+wire  [21:0] gamma_bus;
 wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
@@ -91,18 +92,22 @@ wire         ioctl_wr;
 wire  [26:0] ioctl_addr;
 wire   [7:0] ioctl_dout;
 
+wire         color_board = status[3];
+wire         border_hide = status[6];
+reg          en216p = 0;
+
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 	.EXT_BUS(),
-	.gamma_bus(),
+	.gamma_bus(gamma_bus),
 
 	.forced_scandoubler(forced_scandoubler),
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask(0),
+	.status_menumask({color_board, en216p && !border_hide}),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
@@ -220,7 +225,7 @@ wire  [2:0] vid_dma_idx, vid_dot_idx;
 wire  [7:0] exp_ma, exp_bus;
 wire  [2:0] exp_n;
 wire        exp_tpa, exp_tpb, exp_mrd_n, exp_mwr_n, exp_run;
-wire        hsync, vsync, hblank, vblank;
+wire        hsync, vsync, hblank, vblank, win_hblank, win_vblank;
 wire signed [7:0] audio;
 
 vip_core vip_core
@@ -272,12 +277,13 @@ vip_core vip_core
 	.hsync(hsync),
 	.vsync(vsync),
 	.hblank(hblank),
-	.vblank(vblank)
+	.vblank(vblank),
+	.win_hblank(win_hblank),
+	.win_vblank(win_vblank)
 );
 
 ///////////////////////   VP-590   ///////////////////////////////
 
-wire       color_board = status[3];
 wire [2:0] col_rgb;
 wire       col_bg;
 
@@ -305,19 +311,102 @@ vp590 vp590
 
 ///////////////////////   VIDEO   ////////////////////////////////
 
-// Background channels at reduced luminance (0x80), as in StudioII
-wire [7:0] col_on = col_bg ? 8'h80 : 8'hFF;
-wire [2:0] rgb    = color_board ? col_rgb : {3{pixel}};
+// B/W palettes for the 1-bit path: {dot on, dot off}
+reg [47:0] bw_pal;
+always @(*) begin
+	case (status[15:14])
+		2'd0: bw_pal = {24'hFFFFFF, 24'h000000};
+		2'd1: bw_pal = {24'hFFBF5A, 24'h000000};
+		2'd2: bw_pal = {24'h8FFF63, 24'h000000};
+		2'd3: bw_pal = {24'h000000, 24'hFFFFFF};
+	endcase
+end
+
+// VP-590 background channels at reduced luminance (0x80), as in StudioII
+wire  [7:0] col_on  = col_bg ? 8'h80 : 8'hFF;
+wire [23:0] col_out = {col_rgb[2] ? col_on : 8'h00,
+                       col_rgb[1] ? col_on : 8'h00,
+                       col_rgb[0] ? col_on : 8'h00};
+wire [23:0] bw_out  = pixel ? bw_pal[47:24] : bw_pal[23:0];
+wire [23:0] rgb     = color_board ? col_out : bw_out;
+
+// Borders hidden: only the 64x128 bitmap window is displayed
+wire vid_hblank  = border_hide ? win_hblank : hblank;
+wire vid_vblank  = border_hide ? win_vblank : vblank;
+
+// ce_pix gives 4 samples per 1861 dot (384 px line). The scandoubler gets 2
+// (192 px): its pixel-length tracking needs more than the 3-4 clk_sys that
+// the fractional VP-590 rate leaves between ce_pix.
+wire ce_vid = forced_scandoubler ? (ce_pix & ce_div[0]) : ce_pix;
+wire vga_de;
 
 assign CLK_VIDEO = clk_sys;
-assign CE_PIXEL  = ce_pix;   // 4 samples per 1861 dot (384 px line, like StudioII); the bare dot rate (96 px) was never tested on hardware
 
-assign VGA_DE = ~(hblank | vblank);
-assign VGA_HS = hsync;
-assign VGA_VS = vsync;
-assign VGA_R  = rgb[2] ? col_on : 8'h00;
-assign VGA_G  = rgb[1] ? col_on : 8'h00;
-assign VGA_B  = rgb[0] ? col_on : 8'h00;
+video_mixer #(.LINE_LENGTH(192), .GAMMA(1)) video_mixer
+(
+	.CLK_VIDEO(CLK_VIDEO),
+	.CE_PIXEL(CE_PIXEL),
+	.ce_pix(ce_vid),
+	.scandoubler(forced_scandoubler),
+	.hq2x(1'b0),
+	.gamma_bus(gamma_bus),
+	.R(rgb[23:16]),
+	.G(rgb[15:8]),
+	.B(rgb[7:0]),
+	.HSync(hsync),
+	.VSync(vsync),
+	.HBlank(vid_hblank),
+	.VBlank(vid_vblank),
+	.HDMI_FREEZE(HDMI_FREEZE),
+	.freeze_sync(),
+	.VGA_R(VGA_R),
+	.VGA_G(VGA_G),
+	.VGA_B(VGA_B),
+	.VGA_VS(VGA_VS),
+	.VGA_HS(VGA_HS),
+	.VGA_DE(vga_de)
+);
+
+// 5x 216p crop at 1920x1080. With borders shown 224 lines are visible, so
+// 216 leaves 44 border lines above and below the 128-line bitmap and the
+// offset can move the window by up to 4 lines.
+reg [4:0] crop_off = 0;
+always @(posedge CLK_VIDEO) begin
+	en216p   <= HDMI_WIDTH == 12'd1920 && HDMI_HEIGHT == 12'd1080 && !forced_scandoubler;
+	crop_off <= (status[13:10] < 4'd5) ? {1'b0, status[13:10]} : {1'b0, status[13:10]} - 5'd9;
+end
+
+// VSync one pixel later, so the DE falling edge and the VSync rising edge
+// fall on separate pixel enables in video_freak
+reg vf_vs = 0;
+always @(posedge CLK_VIDEO) if (CE_PIXEL) vf_vs <= VGA_VS;
+
+// Both boards make a 112 x 262 raster, so a CRT shows the same 1861 dot:
+// 390/112 square pixels wide (NTSC, 240 lines) by 262.5/262 lines high. That
+// gives 213:143 for the 96x224 frame and 1703:980 for the 64x128 bitmap.
+wire  [1:0] ar     = status[122:121];
+wire  [1:0] scale  = status[8:7];
+wire [11:0] orig_x = border_hide ? 12'd1703 : 12'd213;
+wire [11:0] orig_y = border_hide ? 12'd980  : 12'd143;
+wire        orig   = !ar || scale;
+
+video_freak video_freak
+(
+	.CLK_VIDEO(CLK_VIDEO),
+	.CE_PIXEL(CE_PIXEL),
+	.VGA_VS(vf_vs),
+	.HDMI_WIDTH(HDMI_WIDTH),
+	.HDMI_HEIGHT(HDMI_HEIGHT),
+	.VGA_DE(VGA_DE),
+	.VIDEO_ARX(VIDEO_ARX),
+	.VIDEO_ARY(VIDEO_ARY),
+	.VGA_DE_IN(vga_de),
+	.ARX(orig ? orig_x : {10'd0, ar - 1'd1}),
+	.ARY(orig ? orig_y : 12'd0),
+	.CROP_SIZE((en216p && status[9]) ? 12'd216 : 12'd0),
+	.CROP_OFF(crop_off),
+	.SCALE({1'b0, scale})
+);
 
 ///////////////////////   AUDIO   ////////////////////////////////
 
