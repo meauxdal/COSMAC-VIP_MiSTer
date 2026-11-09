@@ -68,7 +68,7 @@ localparam CONF_STR = {
 	"P1,System;",
 	"P1O[1],RAM,4K,2K;",
 	"P1O[3],Color board,None,VP-590;",
-	"P1O[2],Reset to,Monitor,Program in RAM;",
+	"P1O[5:4],Reset to,Auto,Monitor,Program in RAM;",
 	"P1F3,ROM,Load Monitor ROM;",
 	"-;",
 
@@ -188,13 +188,24 @@ always @(posedge clk_sys) begin
 	end
 end
 
-// The VIP enters the monitor only if key C is held when RUN goes up. The OSD swallows
-// keys, so by default hold C for ~0.25 s after each reset; skip it after a CH8/BIN load,
-// which should start the program like a real VIP reset without C.
+// The VIP enters the monitor only if key C is held when RUN goes up. The OSD
+// swallows keys, so the core holds C for ~0.25 s after a reset that should
+// enter the monitor. "Reset to" picks which resets those are:
+//   Auto:           monitor until a CH8/BIN is loaded, then the program, until
+//                   the core is reloaded
+//   Monitor:        always the monitor, except the reset of the load itself
+//   Program in RAM: never hold C
+// The reset that ends a CH8/BIN load always starts the program, like a real
+// VIP reset without C.
 wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02);
+reg        prog_loaded = 0;
+always @(posedge clk_sys) if (ld_prog) prog_loaded <= 1;
+
+wire [1:0] reset_to = status[5:4];
+wire       to_prog  = ld_prog || reset_to == 2'd2 || (reset_to == 2'd0 && prog_loaded);
 reg [18:0] hold_c = 0;
 always @(posedge clk_sys) begin
-	if (reset) hold_c <= (status[2] || ld_prog) ? 19'd0 : 19'h7FFFF;
+	if (reset) hold_c <= to_prog ? 19'd0 : 19'h7FFFF;
 	else if (ce_cpu && hold_c) hold_c <= hold_c - 1'd1;
 end
 
