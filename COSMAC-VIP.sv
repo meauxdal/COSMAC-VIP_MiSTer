@@ -49,22 +49,33 @@ assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 
 // ioctl indexes: boot0.rom = 0x00 (monitor), boot1.rom = 0x40 (CHIP-8 interpreter), F1 = 1, F2 = 2, monitor = 3
 `include "build_id.v"
+// OSD lines are 28 chars wide, options include a colon, so 27
 localparam CONF_STR = {
 	"COSMAC-VIP;;",
 	"-;",
+
+
+	// === LOAD ===
 	"F1,CH8,Load CHIP-8;",
 	"F2,BIN,Load Binary;",
 	"-;",
+
+	// === AUDIO & VIDEO ===
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"-;",
+
+	// === SYSTEM ===
 	"P1,System;",
 	"P1O[1],RAM,4K,2K;",
 	"P1O[3],Color board,None,VP-590;",
-	"P1O[2],Reset enters,Monitor (hold C),Program in RAM;",
+	"P1O[2],Reset to,Monitor,Program in RAM;",
 	"P1F3,ROM,Load Monitor ROM;",
 	"-;",
+
+	// === RESET ===
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
+	// === VERSION ===
 	"v,0;",
 	"V,v",`BUILD_DATE
 };

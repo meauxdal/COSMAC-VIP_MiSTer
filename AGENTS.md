@@ -20,6 +20,7 @@ Read every session.
 - Built like a real VIP, by the book: the CPU bus, the Table III expansion interface (MA0-7 multiplexed, TPA/TPB, MRD/MWR, N, SC, INDIS, CS) and the Table II I/O port are modeled as on the board, so expansions (VP-570 RAM, color, sound, keyboards, ...) plug in as they do on hardware. Keep extending until nothing fits or nothing meaningful is left.
 - Open firmware fits the real 512 B ROM window at 8000 and uses the RCA CHIP-8 layout (program at 0200, display at the top RAM page, `0nnn` calls 1802 code).
 - `boot0.rom` is the official RCA monitor. The OSD System page can load a different monitor ROM.
+- OSD text: 28 chars per line, never more. An option shows as `Label:Value` and the colon takes one, so label + the longest value get 27, or the OSD cuts the label. Write every entry as tersely as possible while still describing it correctly.
 - All RTL is written fresh. `StudioII_MiSTer` is a reference for behavior and timing, not a source to copy modules from.
 - `refs/` holds local reference scans (VIP manual from the Hagley Museum, OCR and image copies) and is not committed.
 - Simulation: Verilator runs in WSL (not available in Git Bash).
