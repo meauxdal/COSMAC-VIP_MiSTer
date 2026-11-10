@@ -64,6 +64,10 @@ localparam CONF_STR = {
 	"D1O[15:14],B/W palette,White,Amber,Green,Inverted;",
 	"-;",
 
+	// === INPUT ===
+	"O[16],Joystick,8-way,CHIP-8;",
+	"-;",
+
 	// === SYSTEM ===
 	"P1,System;",
 	"P1O[1],RAM,4K,2K;",
@@ -75,6 +79,8 @@ localparam CONF_STR = {
 	// === RESET ===
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
+	"J1,Fire,Extra;",
+	"jn,A,B;",
 	// === VERSION ===
 	"v,0;",
 	"V,v",`BUILD_DATE
@@ -85,6 +91,7 @@ wire  [21:0] gamma_bus;
 wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
+wire  [31:0] joystick_0;
 
 wire         ioctl_download;
 wire  [15:0] ioctl_index;
@@ -116,7 +123,8 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ioctl_dout(ioctl_dout),
 	.ioctl_wait(0),
 
-	.ps2_key(ps2_key)
+	.ps2_key(ps2_key),
+	.joystick_0(joystick_0)
 );
 
 ///////////////////////   CLOCKS   ///////////////////////////////
@@ -214,7 +222,16 @@ always @(posedge clk_sys) begin
 	else if (ce_cpu && hold_c) hold_c <= hold_c - 1'd1;
 end
 
-wire [15:0] keys = keypad | {3'b000, |hold_c, 12'h000};
+// Pad 1 only; pad 2 is kept for a VP-580 second keypad.
+wire [15:0] joy_keys;
+vip_joystick vip_joystick
+(
+	.joy(joystick_0),
+	.profile(status[16]),
+	.keys(joy_keys)
+);
+
+wire [15:0] keys = keypad | joy_keys | {3'b000, |hold_c, 12'h000};
 
 ///////////////////////   CORE   /////////////////////////////////
 
