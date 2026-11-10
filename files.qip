@@ -1,0 +1,7 @@
+set_global_assignment -name SDC_FILE COSMAC-VIP.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE COSMAC-VIP.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cdp1802.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cdp1861.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/vp590.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/vip_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/vip_joystick.sv

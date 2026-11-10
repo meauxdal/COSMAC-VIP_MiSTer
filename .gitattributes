@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Quartus rewrites project settings with Windows line endings.
+*.qsf text eol=crlf
