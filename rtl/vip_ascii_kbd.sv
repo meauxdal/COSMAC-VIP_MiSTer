@@ -1,14 +1,20 @@
 // RCA VP-601 / VP-611 ASCII keyboard on the Table II I/O port.
-// 7-bit ASCII on IN 0-6 (IN 7 low), strobed into U25 on key down. The status
-// line is low while the key is held; data stays until the next key.
-// Two-key rollover, no auto-repeat (PS/2 typematic is dropped).
-// TODO: strobe/status timing and IN 7 are not confirmed against the VP-601
-// manual.
+// Per the VP-601/611 manual: 7-bit ASCII, two-key rollover, no auto-repeat
+// (PS/2 typematic is dropped), no BREAK key. STROBE is a positive ~15 ms pulse
+// after key activation; it drives INST, latching the byte into U25 (VIP manual:
+// "positive pulse on pins 2 and 14 of U25"). Modelled as one clk, since the data
+// is already valid. KEY DOWN stays active until release; /KD drives EF4 here.
+// IN 7 is held low: the board's even-parity output is optional wiring.
+// The board has separate BS (08) and DEL (7F) keys. Upper-case-only is a
+// jumper (pin 12) on the real board; Caps Lock toggles it here, default on.
+// PC keys keep their PC keycap characters (every printable code is also
+// reachable on the VP-601), but CTRL follows the VP-601 table:
+//   letters -> 01-1A, , - . / -> FS GS RS US, [ -> ESC,
+//   SP CR LF ESC BS DEL and the numeric pad unchanged, all else -> NUL.
+// TODO: whether EF4 came from /KD or /STROBE depended on the user's wiring;
+// /KD is assumed.
 
 module vip_ascii_kbd
-#(
-	parameter [7:0] BKSP = 8'h7F    // Backspace key code
-)
 (
 	input         clk,
 	input         reset,
@@ -78,7 +84,7 @@ function [15:0] lut(input [7:0] code);
 		8'h5A: lut = {2{8'h0D}};        // Enter
 		8'h0D: lut = {2{8'h09}};        // Tab
 		8'h76: lut = {2{8'h1B}};        // Esc
-		8'h66: lut = {2{BKSP}};
+		8'h66: lut = {2{8'h08}};        // Backspace = BS
 
 		// VP-611 numeric pad
 		8'h70: lut = "00";
@@ -118,8 +124,25 @@ wire ctrl  = lctrl | rctrl;
 
 wire       letter = pair[7:0] >= "a" && pair[7:0] <= "z";
 wire [7:0] plain  = (shift || (alpha_lock && letter)) ? pair[15:8] : pair[7:0];
-// CTRL clears bits 6 and 5 of codes 40-7F
-wire [6:0] ascii  = (ctrl && plain[6]) ? {2'b00, plain[4:0]} : plain[6:0];
+
+// CTRL, per the VP-601 Key / Output Character Table, from the unshifted key
+wire [7:0] base     = pair[7:0];
+// VP-611 numeric pad keys (not extended): unaffected by CTRL
+reg pad_key;
+always @(*) case (code)
+	8'h70, 8'h69, 8'h72, 8'h7A, 8'h6B, 8'h73, 8'h74, 8'h6C, 8'h75, 8'h7D,
+	8'h71, 8'h79, 8'h7B, 8'h7C: pad_key = !ext;
+	default:                    pad_key = 0;
+endcase
+
+wire       ctrl_keep = pad_key || base < 8'h20 || base == " " || base == 8'h7F;
+wire       ctrl_fsus = base == "," || base == "-" || base == "." || base == "/";
+wire [7:0] ctrl_code = ctrl_keep ? base                 :
+                       letter    ? {3'b000, base[4:0]}  :
+                       ctrl_fsus ? {4'b0001, base[3:0]} :
+                       base == "[" ? 8'h1B              :
+                                     8'h00;
+wire [6:0] ascii  = ctrl ? ctrl_code[6:0] : plain[6:0];
 
 reg       ps2_old = 0;
 reg       down = 0;

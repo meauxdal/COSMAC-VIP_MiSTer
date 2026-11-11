@@ -398,7 +398,6 @@ vp595 vp595
 	.clk(clk_sys),
 	.ce(ce_cpu),
 	.reset(!exp_run),
-	.tpa(exp_tpa),
 	.tpb(exp_tpb),
 	.mrd_n(exp_mrd_n),
 	.bus(exp_bus),
