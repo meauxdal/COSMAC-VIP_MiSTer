@@ -148,8 +148,10 @@ reg [7:0] rom[512];
 reg [7:0] ram[4096];
 reg [7:0] rom_q, ram_q;
 
-wire        ld_ram_wr = ioctl_download && ioctl_wr && (ld_ch8 || ld_bin);
-wire [11:0] ld_addr   = ld_ch8 ? ioctl_addr[11:0] + 12'h200 : ioctl_addr[11:0];
+// Files reaching past 0FFF continue in expansion RAM (vp570)
+wire [15:0] ld_full   = ld_ch8 ? ioctl_addr + 16'h200 : ioctl_addr;
+wire        ld_ram_wr = ioctl_download && ioctl_wr && (ld_ch8 || ld_bin) && ld_full[15:12] == 4'd0;
+wire [11:0] ld_addr   = ld_full[11:0];
 
 always @(posedge clk) begin
 	if (ioctl_download && ioctl_wr && ld_rom) rom[ioctl_addr[8:0]] <= ioctl_dout;

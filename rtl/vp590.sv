@@ -8,7 +8,6 @@
 // The board's 1862 drives the bus CLOCK line (7.15909 MHz / 4 = 1.7897725 MHz,
 // per the VIPER 2.03.17 schematic); COSMAC-VIP.sv switches the CPU clock enable
 // to that rate while the board is selected.
-// TODO: VP-580 keypad jacks (latch on OUT 2, J1 on EF3, J2 on EF4).
 
 module vp590
 (

@@ -66,12 +66,14 @@ localparam CONF_STR = {
 
 	// === INPUT ===
 	"O[16],Joystick,8-way,CHIP-8;",
+	"O[18],Keyboard,Hex keypads,ASCII;",
 	"-;",
 
 	// === SYSTEM ===
 	"P1,System;",
-	"P1O[1],RAM,4K,2K;",
+	"P1O[2:1],RAM,4K,2K,32K;",
 	"P1O[3],Color board,None,VP-590;",
+	"P1O[17],Sound board,None,VP-595;",
 	"P1O[5:4],Reset to,Auto,Monitor,Program in RAM;",
 	"P1F3,ROM,Load Monitor ROM;",
 	"-;",
@@ -91,7 +93,7 @@ wire  [21:0] gamma_bus;
 wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
-wire  [31:0] joystick_0;
+wire  [31:0] joystick_0, joystick_1;
 
 wire         ioctl_download;
 wire  [15:0] ioctl_index;
@@ -124,7 +126,8 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ioctl_wait(0),
 
 	.ps2_key(ps2_key),
-	.joystick_0(joystick_0)
+	.joystick_0(joystick_0),
+	.joystick_1(joystick_1)
 );
 
 ///////////////////////   CLOCKS   ///////////////////////////////
@@ -169,16 +172,22 @@ wire reset = RESET | status[0] | buttons[1] | ioctl_download;
 
 ///////////////////////   KEYPAD   ///////////////////////////////
 
-// PC keys -> VIP hex keypad, same physical layout:
-//   1 2 3 4    1 2 3 C
-//   Q W E R    4 5 6 D
-//   A S D F    7 8 9 E
-//   Z X C V    A 0 B F
+// PC keys -> VIP hex keypad and VP-580 second keypad, same physical layout:
+//   1 2 3 4    7 8 9 0    1 2 3 C
+//   Q W E R    U I O P    4 5 6 D
+//   A S D F    J K L ;    7 8 9 E
+//   Z X C V    M , . /    A 0 B F
 reg [15:0] keypad = 0;
+reg [15:0] keypad2 = 0;
 reg        ps2_old = 0;
+wire       ascii_kbd = status[18];
 always @(posedge clk_sys) begin
 	ps2_old <= ps2_key[10];
-	if (ps2_old != ps2_key[10] && !ps2_key[8]) begin
+	if (ascii_kbd) begin
+		keypad  <= 0;
+		keypad2 <= 0;
+	end
+	else if (ps2_old != ps2_key[10] && !ps2_key[8]) begin
 		case (ps2_key[7:0])
 			8'h16: keypad[4'h1] <= ps2_key[9];
 			8'h1E: keypad[4'h2] <= ps2_key[9];
@@ -196,6 +205,23 @@ always @(posedge clk_sys) begin
 			8'h22: keypad[4'h0] <= ps2_key[9];
 			8'h21: keypad[4'hB] <= ps2_key[9];
 			8'h2A: keypad[4'hF] <= ps2_key[9];
+
+			8'h3D: keypad2[4'h1] <= ps2_key[9];
+			8'h3E: keypad2[4'h2] <= ps2_key[9];
+			8'h46: keypad2[4'h3] <= ps2_key[9];
+			8'h45: keypad2[4'hC] <= ps2_key[9];
+			8'h3C: keypad2[4'h4] <= ps2_key[9];
+			8'h43: keypad2[4'h5] <= ps2_key[9];
+			8'h44: keypad2[4'h6] <= ps2_key[9];
+			8'h4D: keypad2[4'hD] <= ps2_key[9];
+			8'h3B: keypad2[4'h7] <= ps2_key[9];
+			8'h42: keypad2[4'h8] <= ps2_key[9];
+			8'h4B: keypad2[4'h9] <= ps2_key[9];
+			8'h4C: keypad2[4'hE] <= ps2_key[9];
+			8'h3A: keypad2[4'hA] <= ps2_key[9];
+			8'h41: keypad2[4'h0] <= ps2_key[9];
+			8'h49: keypad2[4'hB] <= ps2_key[9];
+			8'h4A: keypad2[4'hF] <= ps2_key[9];
 			default: ;
 		endcase
 	end
@@ -222,8 +248,8 @@ always @(posedge clk_sys) begin
 	else if (ce_cpu && hold_c) hold_c <= hold_c - 1'd1;
 end
 
-// Pad 1 only; pad 2 is kept for a VP-580 second keypad.
-wire [15:0] joy_keys;
+// Pad 1 is the VIP keypad, pad 2 the VP-580 second keypad
+wire [15:0] joy_keys, joy2_keys;
 vip_joystick vip_joystick
 (
 	.joy(joystick_0),
@@ -231,7 +257,30 @@ vip_joystick vip_joystick
 	.keys(joy_keys)
 );
 
-wire [15:0] keys = keypad | joy_keys | {3'b000, |hold_c, 12'h000};
+vip_joystick vip_joystick2
+(
+	.joy(joystick_1),
+	.profile(status[16]),
+	.keys(joy2_keys)
+);
+
+wire [15:0] keys  = keypad | joy_keys | {3'b000, |hold_c, 12'h000};
+wire [15:0] keys2 = keypad2 | joy2_keys;
+
+// The ASCII keyboard takes the PC keys from the keypads and EF4 from the
+// second keypad: both use the I/O port flag line.
+wire [7:0] kbd_data;
+wire       kbd_strobe, kbd_ef_n;
+
+vip_ascii_kbd vip_ascii_kbd
+(
+	.clk(clk_sys),
+	.reset(reset),
+	.ps2_key(ps2_key),
+	.data(kbd_data),
+	.strobe(kbd_strobe),
+	.ef_n(kbd_ef_n)
+);
 
 ///////////////////////   CORE   /////////////////////////////////
 
@@ -242,6 +291,9 @@ wire  [2:0] vid_dma_idx, vid_dot_idx;
 wire  [7:0] exp_ma, exp_bus;
 wire  [2:0] exp_n;
 wire        exp_tpa, exp_tpb, exp_mrd_n, exp_mwr_n, exp_run;
+wire  [7:0] ram_bus;
+wire        ram_oe, ram_indis;
+wire        key2_ef4_n;
 wire        hsync, vsync, hblank, vblank, win_hblank, win_vblank;
 wire signed [7:0] audio;
 
@@ -250,7 +302,7 @@ vip_core vip_core
 	.clk(clk_sys),
 	.ce(ce_cpu),
 	.reset(reset),
-	.ram_2k(status[1]),
+	.ram_2k(status[2:1] == 2'd1),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index[7:0]),
@@ -271,17 +323,17 @@ vip_core vip_core
 	.exp_run(exp_run),
 	.exp_cs(),
 	.exp_cdef_n(),
-	.exp_bus_in(8'hFF),
-	.exp_bus_oe(1'b0),
-	.exp_indis(1'b0),
+	.exp_bus_in(ram_bus),
+	.exp_bus_oe(ram_oe),
+	.exp_indis(ram_indis),
 	.exp_int_n(1'b1),
 	.exp_dma_in_n(1'b1),
 	.exp_dma_out_n(1'b1),
-	.exp_ef_n(4'hF),
+	.exp_ef_n({ascii_kbd ? kbd_ef_n : key2_ef4_n, 3'b111}),
 
 	.io_out(),
-	.io_in(8'h00),
-	.io_inst(1'b0),
+	.io_in(kbd_data),
+	.io_inst(kbd_strobe && ascii_kbd),
 
 	.q(q),
 	.audio(audio),
@@ -297,6 +349,62 @@ vip_core vip_core
 	.vblank(vblank),
 	.win_hblank(win_hblank),
 	.win_vblank(win_vblank)
+);
+
+///////////////////////   VP-570   ///////////////////////////////
+
+vp570 vp570
+(
+	.clk(clk_sys),
+	.ce(ce_cpu),
+	.enable(status[2:1] == 2'd2),
+
+	.ioctl_download(ioctl_download),
+	.ioctl_index(ioctl_index[7:0]),
+	.ioctl_wr(ioctl_wr),
+	.ioctl_addr(ioctl_addr[15:0]),
+	.ioctl_dout(ioctl_dout),
+
+	.ma(exp_ma),
+	.tpa(exp_tpa),
+	.mrd_n(exp_mrd_n),
+	.mwr_n(exp_mwr_n),
+	.bus(exp_bus),
+	.bus_out(ram_bus),
+	.bus_oe(ram_oe),
+	.indis(ram_indis)
+);
+
+///////////////////////   VP-585   ///////////////////////////////
+
+vp585 vp585
+(
+	.clk(clk_sys),
+	.ce(ce_cpu),
+	.tpb(exp_tpb),
+	.mrd_n(exp_mrd_n),
+	.bus(exp_bus),
+	.n(exp_n),
+	.keypad_b(keys2),
+	.ef4_n(key2_ef4_n)
+);
+
+///////////////////////   VP-595   ///////////////////////////////
+
+wire signed [7:0] snd_audio;
+
+vp595 vp595
+(
+	.clk(clk_sys),
+	.ce(ce_cpu),
+	.reset(!exp_run),
+	.tpa(exp_tpa),
+	.tpb(exp_tpb),
+	.mrd_n(exp_mrd_n),
+	.bus(exp_bus),
+	.n(exp_n),
+	.q(q),
+	.audio(snd_audio)
 );
 
 ///////////////////////   VP-590   ///////////////////////////////
@@ -429,8 +537,11 @@ video_freak video_freak
 
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = 0;
-assign AUDIO_L   = {audio, 8'd0};
-assign AUDIO_R   = {audio, 8'd0};
+// The VP-595 replaces the on-board tone
+wire signed [7:0] audio_out = status[17] ? snd_audio : audio;
+
+assign AUDIO_L   = {audio_out, 8'd0};
+assign AUDIO_R   = {audio_out, 8'd0};
 
 assign LED_USER = q;
 
