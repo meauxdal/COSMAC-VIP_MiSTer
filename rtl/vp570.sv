@@ -28,9 +28,11 @@ module vp570
 
 // Loader, as in vip_core: 1 = .CH8 (RAM 0200), 2 = .BIN (RAM 0000)
 wire        ld_ch8  = ioctl_index == 8'h01;
+wire        ld_c8x  = ioctl_index == 8'h04;
 wire        ld_bin  = ioctl_index == 8'h02;
-wire [15:0] ld_addr = ld_ch8 ? ioctl_addr + 16'h200 : ioctl_addr;
-wire        ld_wr   = ioctl_download && ioctl_wr && (ld_ch8 || ld_bin) && !ld_addr[15];
+wire [15:0] ld_addr = ld_ch8 ? ioctl_addr + 16'h200 :
+                      ld_c8x ? ioctl_addr + 16'h300 : ioctl_addr;
+wire        ld_wr   = ioctl_download && ioctl_wr && (ld_ch8 || ld_c8x || ld_bin) && !ld_addr[15];
 
 reg  [7:0] a_hi;
 always @(posedge clk) if (ce && tpa) a_hi <= ma;

@@ -42,7 +42,8 @@ assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
 
-// ioctl indexes: boot0.rom = 0x00 (monitor), boot1.rom = 0x40 (CHIP-8 interpreter), F1 = 1, F2 = 2, monitor = 3
+// ioctl indexes: boot0.rom = 0x00 (monitor), boot1.rom = 0x40 (CHIP-8 interpreter),
+// boot2.rom = 0x80 (CHIP-8X interpreter), F1 = 1, F2 = 2, monitor = 3, F4 = 4
 `include "build_id.v"
 // OSD lines are 28 chars wide, options include a colon, so 27
 localparam CONF_STR = {
@@ -52,6 +53,7 @@ localparam CONF_STR = {
 
 	// === LOAD ===
 	"F1,CH8,Load CHIP-8;",
+	"F4,C8X,Load CHIP-8X;",
 	"F2,BIN,Load Binary;",
 	"-;",
 
@@ -72,8 +74,8 @@ localparam CONF_STR = {
 	// === SYSTEM ===
 	"P1,System;",
 	"P1O[2:1],RAM,4K,2K,32K;",
-	"P1O[3],Color board,None,VP-590;",
-	"P1O[17],Sound board,None,VP-595;",
+	"P1O[20:19],Color board,Auto,None,VP-590;",
+	"P1O[22:21],Sound board,Auto,None,VP-595;",
 	"P1O[5:4],Reset to,Auto,Monitor,Program in RAM;",
 	"P1F3,ROM,Load Monitor ROM;",
 	"-;",
@@ -101,7 +103,16 @@ wire         ioctl_wr;
 wire  [26:0] ioctl_addr;
 wire   [7:0] ioctl_dout;
 
-wire         color_board = status[3];
+// Board selects. Auto: fitted while the last program loaded was a .c8x
+// (CHIP-8X expects the VP-590 and VP-595), absent after a .ch8 or .bin.
+// Bits 3 and 17 held the old None/VP-590 and None/VP-595 options; left unused.
+reg          c8x_mode = 0;
+always @(posedge clk_sys)
+	if (ioctl_download && ioctl_index[7:0] == 8'h04) c8x_mode <= 1;
+	else if (ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02)) c8x_mode <= 0;
+
+wire         color_board = status[20:19] == 2'd0 ? c8x_mode : status[20:19] == 2'd2;
+wire         sound_board = status[22:21] == 2'd0 ? c8x_mode : status[22:21] == 2'd2;
 wire         border_hide = status[6];
 reg          en216p = 0;
 
@@ -152,7 +163,7 @@ localparam [21:0] CE_INC_590 = 22'd715909;   // 1.7897725 MHz
 reg  [21:0] ce_acc = 0;
 reg   [1:0] ce_div = 0;
 reg         ce_pix = 0;
-wire [21:0] ce_inc  = status[3] ? CE_INC_590 : CE_INC_VIP;
+wire [21:0] ce_inc  = color_board ? CE_INC_590 : CE_INC_VIP;
 wire [22:0] ce_next = ce_acc + ce_inc;
 
 always @(posedge clk_sys) begin
@@ -230,13 +241,14 @@ end
 // The VIP enters the monitor only if key C is held when RUN goes up. The OSD
 // swallows keys, so the core holds C for ~0.25 s after a reset that should
 // enter the monitor. "Reset to" picks which resets those are:
-//   Auto:           monitor until a CH8/BIN is loaded, then the program, until
+//   Auto:           monitor until a CH8/C8X/BIN is loaded, then the program, until
 //                   the core is reloaded
 //   Monitor:        always the monitor, except the reset of the load itself
 //   Program in RAM: never hold C
-// The reset that ends a CH8/BIN load always starts the program, like a real
+// The reset that ends a program load always starts the program, like a real
 // VIP reset without C.
-wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02);
+wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02 ||
+                                        ioctl_index[7:0] == 8'h04);
 reg        prog_loaded = 0;
 always @(posedge clk_sys) if (ld_prog) prog_loaded <= 1;
 
@@ -537,7 +549,7 @@ video_freak video_freak
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = 0;
 // The VP-595 replaces the on-board tone
-wire signed [7:0] audio_out = status[17] ? snd_audio : audio;
+wire signed [7:0] audio_out = sound_board ? snd_audio : audio;
 
 assign AUDIO_L   = {audio_out, 8'd0};
 assign AUDIO_R   = {audio_out, 8'd0};

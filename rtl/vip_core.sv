@@ -60,31 +60,47 @@ module vip_core
 
 ///////////////////////   LOADER   ///////////////////////////////
 
-// ioctl indexes: 0x00 boot0.rom / 3 OSD = monitor ROM, 0x40 boot1.rom = CHIP-8 interpreter,
-// 1 = .CH8 (RAM 0200, interpreter copied to 0000 afterwards), 2 = .BIN (RAM 0000)
-wire ld_rom    = ioctl_index == 8'h00 || ioctl_index == 8'h03;
-wire ld_interp = ioctl_index == 8'h40;
-wire ld_ch8    = ioctl_index == 8'h01;
-wire ld_bin    = ioctl_index == 8'h02;
+// ioctl indexes: 0x00 boot0.rom / 3 OSD = monitor ROM,
+// 0x40 boot1.rom = CHIP-8 interpreter (512 bytes),
+// 0x80 boot2.rom = CHIP-8X interpreter (768 bytes, VP-590/595 manual ch. II),
+// 1 = .CH8 (RAM 0200), 4 = .C8X (RAM 0300): the matching interpreter is copied
+// to 0000 afterwards, as if loaded from tape first. 2 = .BIN (RAM 0000).
+wire ld_rom      = ioctl_index == 8'h00 || ioctl_index == 8'h03;
+wire ld_interp   = ioctl_index == 8'h40;
+wire ld_interp8x = ioctl_index == 8'h80;
+wire ld_ch8      = ioctl_index == 8'h01;
+wire ld_c8x      = ioctl_index == 8'h04;
+wire ld_bin      = ioctl_index == 8'h02;
 
-reg  [7:0] interp[512];
+// Interpreter store: CHIP-8 at 000-1FF, CHIP-8X at 400-6FF
+reg  [7:0] interp[2048];
 reg  [7:0] interp_q;
-reg  [9:0] copy_cnt = 10'h3FF;     // bit 9 set = idle
-reg  [8:0] copy_dst;
+reg  [9:0] copy_cnt = 0;
+reg  [9:0] copy_end = 0;           // copy_cnt == copy_end = idle
+reg        copy_8x;
+reg  [9:0] copy_dst;
 reg        copy_wr;
 reg        dl_old;
 
-wire copy_busy = !copy_cnt[9] || copy_wr;
+wire copy_run  = copy_cnt != copy_end;
+wire copy_busy = copy_run || copy_wr;
 
 always @(posedge clk) begin
 	dl_old <= ioctl_download;
-	if (ioctl_download && ioctl_wr && ld_interp) interp[ioctl_addr[8:0]] <= ioctl_dout;
+	if (ioctl_download && ioctl_wr && ld_interp && ioctl_addr[15:9] == 0)
+		interp[{2'b00, ioctl_addr[8:0]}] <= ioctl_dout;
+	if (ioctl_download && ioctl_wr && ld_interp8x && ioctl_addr[15:0] < 16'h300)
+		interp[{1'b1, ioctl_addr[9:0]}] <= ioctl_dout;
 
-	interp_q <= interp[copy_cnt[8:0]];
-	copy_dst <= copy_cnt[8:0];
-	copy_wr  <= !copy_cnt[9];
-	if (dl_old && !ioctl_download && ld_ch8) copy_cnt <= 0;
-	else if (!copy_cnt[9]) copy_cnt <= copy_cnt + 1'd1;
+	interp_q <= interp[{copy_8x, copy_cnt}];
+	copy_dst <= copy_cnt;
+	copy_wr  <= copy_run;
+	if (dl_old && !ioctl_download && (ld_ch8 || ld_c8x)) begin
+		copy_cnt <= 0;
+		copy_end <= ld_c8x ? 10'h300 : 10'h200;
+		copy_8x  <= ld_c8x;
+	end
+	else if (copy_run) copy_cnt <= copy_cnt + 1'd1;
 end
 
 ///////////////////////   CPU   //////////////////////////////////
@@ -149,8 +165,9 @@ reg [7:0] ram[4096];
 reg [7:0] rom_q, ram_q;
 
 // Files reaching past 0FFF continue in expansion RAM (vp570)
-wire [15:0] ld_full   = ld_ch8 ? ioctl_addr + 16'h200 : ioctl_addr;
-wire        ld_ram_wr = ioctl_download && ioctl_wr && (ld_ch8 || ld_bin) && ld_full[15:12] == 4'd0;
+wire [15:0] ld_full   = ld_ch8 ? ioctl_addr + 16'h200 :
+                        ld_c8x ? ioctl_addr + 16'h300 : ioctl_addr;
+wire        ld_ram_wr = ioctl_download && ioctl_wr && (ld_ch8 || ld_c8x || ld_bin) && ld_full[15:12] == 4'd0;
 wire [11:0] ld_addr   = ld_full[11:0];
 
 always @(posedge clk) begin
@@ -160,7 +177,7 @@ end
 
 always @(posedge clk) begin
 	if (ld_ram_wr)                       ram[ld_addr] <= ioctl_dout;
-	else if (copy_wr)                    ram[{3'd0, copy_dst}] <= interp_q;
+	else if (copy_wr)                    ram[{2'd0, copy_dst}] <= interp_q;
 	else if (ce && !mwr_n && ram_cs)     ram[addr] <= bus;
 	ram_q <= ram[addr];
 end

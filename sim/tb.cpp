@@ -1,5 +1,5 @@
 // vip_core testbench: load ROM/program through ioctl, run frames, dump the last frame as PGM.
-// Usage: tb <monitor.rom> [-i interp.bin] [-c prog.ch8] [-b prog.bin] [-k hexkeys] [-r release_frame] [-s frame:keys] [-f frames] [-2k] [-o out.pgm]
+// Usage: tb <monitor.rom> [-i interp.bin] [-I interp8x.bin] [-c prog.ch8] [-x prog.c8x] [-b prog.bin] [-k hexkeys] [-r release_frame] [-s frame:keys] [-f frames] [-2k] [-o out.pgm]
 
 #include "Vvip_core.h"
 #include "Vvip_core___024root.h"
@@ -53,12 +53,14 @@ int main(int argc, char **argv)
 	top = new Vvip_core;
 	if (getenv("CEDIV")) cediv = atoi(getenv("CEDIV"));
 
-	const char *rom = nullptr, *interp = nullptr, *ch8 = nullptr, *bin = nullptr, *out = "frame.pgm";
+	const char *rom = nullptr, *interp = nullptr, *interp8x = nullptr, *c8x = nullptr, *ch8 = nullptr, *bin = nullptr, *out = "frame.pgm";
 	unsigned keys = 0;
 	int frames = 30, release = -1, seq_start = 0;
 	const char *seq = "";
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-i")) interp = argv[++i];
+		else if (!strcmp(argv[i], "-I")) interp8x = argv[++i];
+		else if (!strcmp(argv[i], "-x")) c8x = argv[++i];
 		else if (!strcmp(argv[i], "-c")) ch8 = argv[++i];
 		else if (!strcmp(argv[i], "-b")) bin = argv[++i];
 		else if (!strcmp(argv[i], "-k")) { for (char *k = argv[++i]; *k; k++) keys |= 1u << strtol((char[]){*k, 0}, nullptr, 16); }
@@ -81,6 +83,8 @@ int main(int argc, char **argv)
 	if (interp) download(0x40, load(interp));
 	if (bin) download(0x02, load(bin));
 	if (ch8) download(0x01, load(ch8));
+	if (interp8x) download(0x80, load(interp8x));
+	if (c8x) download(0x04, load(c8x));
 
 	top->keypad = keys;
 	for (int i = 0; i < 64; i++) tick();
