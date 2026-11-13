@@ -77,7 +77,7 @@ localparam CONF_STR = {
 	"P1O[20:19],Color board,Auto,None,VP-590;",
 	"P1O[22:21],Sound board,Auto,None,VP-595;",
 	"P1O[5:4],Reset to,Auto,Monitor,Program in RAM;",
-	"P1F3,ROM,Load Monitor ROM;",
+	"P1F3,ROMBIN,Load ROM (8000-FFFF);",
 	"-;",
 
 	// === RESET ===

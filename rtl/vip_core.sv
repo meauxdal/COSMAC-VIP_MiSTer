@@ -60,7 +60,7 @@ module vip_core
 
 ///////////////////////   LOADER   ///////////////////////////////
 
-// ioctl indexes: 0x00 boot0.rom / 3 OSD = monitor ROM,
+// ioctl indexes: 0x00 boot0.rom / 3 OSD = monitor ROM (up to 32K at 8000),
 // 0x40 boot1.rom = CHIP-8 interpreter (512 bytes),
 // 0x80 boot2.rom = CHIP-8X interpreter (768 bytes, VP-590/595 manual ch. II),
 // 1 = .CH8 (RAM 0200), 4 = .C8X (RAM 0300): the matching interpreter is copied
@@ -141,28 +141,47 @@ cdp1802 cpu
 ///////////////////////   MEMORY DECODE   ////////////////////////
 
 // U6A: cleared while RUN is down, set by any N2 I/O pulse (OUT 4 in the monitor).
-// U6B: held set by U6A, otherwise latches A15 at TPA. U8 latches A8-A11 at TPA.
+// U6B: held set by U6A, otherwise latches A15 at TPA. U8 latches A8-A11 at TPA;
+// A12-A14 are latched too, for a ROM larger than the stock 512 bytes.
 reg       u6a, u6b;
-reg [3:0] a_hi;
+reg [6:0] a_hi;
+
+// ROM socket: the stock 512-byte monitor, or a larger EPROM up to 32K
+// (8000-FFFF) such as J-VIP. The image mirrors at its size rounded up to a
+// power of two, so 512 bytes behaves exactly like the stock part. A ROM
+// load sets the size; the next core load restores boot0.rom.
+reg  [7:0] rom[32768];
+reg [14:0] rom_top = 15'h01FF;
+reg [14:0] rom_mask = 15'h01FF;
+
+// A ROM larger than 512 bytes is taken as a J-VIP / VIP-S board (Bensadon and
+// Miraglia, 2015; VIP-S 1b schematic): there RESET sets a U6B/U6C latch that
+// any memory read with A15 high clears (U6D). J-VIP relies on it, since its
+// no-key boot path jumps to 0000 without an N2 OUT.
+wire rom_big = rom_mask[9];
+reg  a15;
 
 always @(posedge clk) begin
 	if (!run) u6a <= 0;
 	else if (ce && tpb && n[2]) u6a <= 1;
+	else if (ce && tpb && !mrd_n && a15 && rom_big) u6a <= 1;
 
 	if (!u6a) u6b <= 1;
 	else if (ce && tpa) u6b <= ma[7];
 
-	if (ce && tpa) a_hi <= ma[3:0];
+	if (ce && tpa) {a15, a_hi} <= ma;
 end
 
-wire [11:0] addr     = {a_hi, ma};
+wire [11:0] addr     = {a_hi[3:0], ma};
 wire        rom_cs   = u6b;
 wire        ram_sect = !ram_2k || !a_hi[3];             // 2K board has sections 0-1 only
 wire        ram_cs   = !rom_cs && !exp_indis && ram_sect;
 
-reg [7:0] rom[512];
-reg [7:0] ram[4096];
-reg [7:0] rom_q, ram_q;
+reg  [7:0] ram[4096];
+reg  [7:0] rom_q, ram_q;
+
+wire [14:0] rom_smear = rom_top | rom_top >> 1 | rom_top >> 2 | rom_top >> 4 | rom_top >> 8;
+wire [14:0] rom_addr  = {a_hi, ma} & rom_mask;
 
 // Files reaching past 0FFF continue in expansion RAM (vp570)
 wire [15:0] ld_full   = ld_ch8 ? ioctl_addr + 16'h200 :
@@ -171,8 +190,12 @@ wire        ld_ram_wr = ioctl_download && ioctl_wr && (ld_ch8 || ld_c8x || ld_bi
 wire [11:0] ld_addr   = ld_full[11:0];
 
 always @(posedge clk) begin
-	if (ioctl_download && ioctl_wr && ld_rom) rom[ioctl_addr[8:0]] <= ioctl_dout;
-	rom_q <= rom[addr[8:0]];
+	if (ioctl_download && ioctl_wr && ld_rom && !ioctl_addr[15]) begin
+		rom[ioctl_addr[14:0]] <= ioctl_dout;
+		rom_top <= ioctl_addr[14:0] | 15'h01FF;
+	end
+	rom_mask <= rom_smear;
+	rom_q <= rom[rom_addr];
 end
 
 always @(posedge clk) begin
