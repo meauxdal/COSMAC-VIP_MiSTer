@@ -76,7 +76,7 @@ localparam CONF_STR = {
 	"P1O[2:1],RAM,4K,2K,32K;",
 	"P1O[20:19],Color board,Auto,None,VP-590;",
 	"P1O[22:21],Sound board,Auto,None,VP-595;",
-	"P1O[5:4],Reset to,Auto,Monitor,Program in RAM;",
+	"P1O[27:23],Reset key,Auto,None,C (Monitor),0,1,2,3,4,5,6,7,8,9,A,B,D,E,F;",
 	"P1F3,ROMBIN,Load ROM (8000-FFFF);",
 	"-;",
 
@@ -238,13 +238,13 @@ always @(posedge clk_sys) begin
 	end
 end
 
-// The VIP enters the monitor only if key C is held when RUN goes up. The OSD
-// swallows keys, so the core holds C for ~0.25 s after a reset that should
-// enter the monitor. "Reset to" picks which resets those are:
-//   Auto:           monitor until a CH8/C8X/BIN is loaded, then the program, until
-//                   the core is reloaded
-//   Monitor:        always the monitor, except the reset of the load itself
-//   Program in RAM: never hold C
+// The VIP enters the monitor only if key C is held when RUN goes up, and ROMs
+// such as J-VIP pick other boot paths by other held keys. The OSD swallows
+// keys, so the core holds one key for ~0.25 s after a reset. "Reset key":
+//   Auto:   C until a CH8/C8X/BIN is loaded, then none, until the core is
+//           reloaded
+//   None:   never hold a key (run the program in RAM)
+//   C, 0-F: always hold that key, except on the reset of a program load
 // The reset that ends a program load always starts the program, like a real
 // VIP reset without C.
 wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02 ||
@@ -252,12 +252,15 @@ wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index
 reg        prog_loaded = 0;
 always @(posedge clk_sys) if (ld_prog) prog_loaded <= 1;
 
-wire [1:0] reset_to = status[5:4];
-wire       to_prog  = ld_prog || reset_to == 2'd2 || (reset_to == 2'd0 && prog_loaded);
-reg [18:0] hold_c = 0;
+// OSD index: 0 Auto, 1 None, 2 C, 3-17 keys 0-B then D-F (C skipped)
+wire [4:0] reset_key = status[27:23];
+wire [4:0] key_idx   = reset_key - 5'd3;
+wire [3:0] hold_key  = reset_key <= 5'd2 ? 4'hC : key_idx[3:0] + (key_idx >= 5'd12);
+wire       hold_en   = !ld_prog && reset_key != 5'd1 && !(reset_key == 5'd0 && prog_loaded);
+reg [18:0] hold = 0;
 always @(posedge clk_sys) begin
-	if (reset) hold_c <= to_prog ? 19'd0 : 19'h7FFFF;
-	else if (ce_cpu && hold_c) hold_c <= hold_c - 1'd1;
+	if (reset) hold <= hold_en ? 19'h7FFFF : 19'd0;
+	else if (ce_cpu && hold) hold <= hold - 1'd1;
 end
 
 // Pad 1 is the VIP keypad, pad 2 the VP-580 second keypad
@@ -276,7 +279,7 @@ vip_joystick vip_joystick2
 	.keys(joy2_keys)
 );
 
-wire [15:0] keys  = keypad | joy_keys | {3'b000, |hold_c, 12'h000};
+wire [15:0] keys  = keypad | joy_keys | ({15'd0, |hold} << hold_key);
 wire [15:0] keys2 = keypad2 | joy2_keys;
 
 // The ASCII keyboard takes the PC keys from the keypads and EF4 from the
