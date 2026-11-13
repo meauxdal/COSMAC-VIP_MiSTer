@@ -83,7 +83,9 @@ always @(posedge clk) begin
 end
 
 assign int_n  = !(enabled && line >= DISP_START - 2 && line < DISP_START);
-assign efx_n  = !(enabled && ((line >= DISP_START - 4 && line < DISP_START) || (line >= DISP_END - 4 && line < DISP_END)));
+// DISP STATUS runs whether or not the display is on: VP-700 Tiny BASIC waits for
+// it with the display off before INP 1 (as in MAME and Emma).
+assign efx_n  = !(((line >= DISP_START - 4 && line < DISP_START) || (line >= DISP_END - 4 && line < DISP_END)));
 assign dmao_n = !(enabled && disp_line && cyc >= 1 && cyc <= 12 && dcnt < 8);
 
 // Raster: byte k is shown in cycle 5+k. Visible area wraps the counter boundary

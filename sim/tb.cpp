@@ -1,5 +1,5 @@
 // vip_core testbench: load ROM/program through ioctl, run frames, dump the last frame as PGM.
-// Usage: tb <monitor.rom> [-i interp.bin] [-I interp8x.bin] [-c prog.ch8] [-x prog.c8x] [-b prog.bin] [-k hexkeys] [-r release_frame] [-s frame:keys] [-f frames] [-2k] [-o out.pgm]
+// Usage: tb <monitor.rom> [-i interp.bin] [-I interp8x.bin] [-c prog.ch8] [-x prog.c8x] [-b prog.bin] [-k hexkeys] [-r release_frame] [-s frame:keys] [-f frames] [-2k|-32k] [-o out.pgm]
 
 #include "Vvip_core.h"
 #include "Vvip_core___024root.h"
@@ -14,10 +14,24 @@ static Vvip_core *top;
 static uint64_t ticks;
 static unsigned cediv = 2;           // env CEDIV: clocks per ce (hardware uses 16)
 
+static bool ram32k;                  // -32k: VP-570 boards at 1000-7FFF
+static uint8_t xram[0x8000], xhi;
+
 static void tick()
 {
 	top->clk = 0; top->eval();
+	bool ce = top->ce;
 	top->clk = 1; top->eval();
+	if (ram32k) {
+		if (ce && top->exp_tpa) xhi = top->exp_ma;
+		uint16_t a = (xhi & 0x7F) << 8 | top->exp_ma;
+		bool sel = !(xhi & 0x80) && (xhi & 0x70);
+		if (ce && sel && !top->exp_mwr_n) xram[a] = top->exp_bus;
+		top->exp_indis = sel;
+		top->exp_bus_oe = sel && !top->exp_mrd_n;
+		top->exp_bus_in = xram[a];
+		top->eval();
+	}
 	ticks++;
 	top->ce = (ticks % cediv) == 0;
 }
@@ -68,6 +82,7 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "-r")) release = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-s")) { seq_start = atoi(argv[++i]); seq = strchr(argv[i], ':') + 1; }
 		else if (!strcmp(argv[i], "-2k")) top->ram_2k = 1;
+		else if (!strcmp(argv[i], "-32k")) ram32k = true;
 		else if (!strcmp(argv[i], "-o")) out = argv[++i];
 		else rom = argv[i];
 	}
@@ -81,7 +96,11 @@ int main(int argc, char **argv)
 
 	download(0x00, load(rom));
 	if (interp) download(0x40, load(interp));
-	if (bin) download(0x02, load(bin));
+	if (bin) {
+		auto b = load(bin);
+		download(0x02, b);
+		for (size_t a = 0x1000; a < b.size() && a < 0x8000; a++) xram[a] = b[a];
+	}
 	if (ch8) download(0x01, load(ch8));
 	if (interp8x) download(0x80, load(interp8x));
 	if (c8x) download(0x04, load(c8x));
@@ -103,6 +122,13 @@ int main(int argc, char **argv)
 			auto *r = top->rootp;
 			static int dline = -1, dfirst, dcount, dmark;
 			int line = r->vip_core__DOT__pixie__DOT__line, cyc = r->vip_core__DOT__pixie__DOT__cyc;
+			static long trace = getenv("TRACE") ? atol(getenv("TRACE")) : 0;
+			if (trace > 0 && r->vip_core__DOT__tpa && r->vip_core__DOT__cpu__DOT__state == 0) {
+				int a = r->vip_core__DOT__cpu__DOT__r[r->vip_core__DOT__cpu__DOT__p];
+				printf("%04X P%X D%02X ef%X\n", a, r->vip_core__DOT__cpu__DOT__p,
+				       r->vip_core__DOT__cpu__DOT__d, r->vip_core__DOT__cpu__DOT__ef_n);
+				trace--;
+			}
 			if (getenv("DMALOG") && frame == frames - 2) {
 				if (r->vip_core__DOT__tpb && r->vip_core__DOT__sc == 2) {
 					if (line != dline) { if (dline >= 0) printf("line %3d first cyc %2d count %d R0 %04X\n", dline, dfirst, dcount, dmark); dline = line; dfirst = cyc; dcount = 0; dmark = r->vip_core__DOT__cpu__DOT__r[0]; }
