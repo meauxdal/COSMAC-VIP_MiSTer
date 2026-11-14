@@ -1,5 +1,5 @@
 // vip_core testbench: load ROM/program through ioctl, run frames, dump the last frame as PGM.
-// Usage: tb <monitor.rom> [-i interp.bin] [-I interp8x.bin] [-c prog.ch8] [-x prog.c8x] [-b prog.bin] [-k hexkeys] [-r release_frame] [-s frame:keys] [-f frames] [-2k|-32k] [-o out.pgm]
+// Usage: tb <monitor.rom> [-i interp.bin] [-I interp8x.bin] [-c prog.ch8] [-x prog.c8x] [-b prog.bin] [-R rom.bin] [-k hexkeys] [-r release_frame] [-s frame:keys] [-f frames] [-2k|-32k] [-o out.pgm]
 
 #include "Vvip_core.h"
 #include "Vvip_core___024root.h"
@@ -67,6 +67,7 @@ int main(int argc, char **argv)
 	top = new Vvip_core;
 	if (getenv("CEDIV")) cediv = atoi(getenv("CEDIV"));
 
+	const char *osd_rom = nullptr;    // -R: OSD Load ROM as .BIN (index 0x43)
 	const char *rom = nullptr, *interp = nullptr, *interp8x = nullptr, *c8x = nullptr, *ch8 = nullptr, *bin = nullptr, *out = "frame.pgm";
 	unsigned keys = 0;
 	int frames = 30, release = -1, seq_start = 0;
@@ -77,6 +78,7 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "-x")) c8x = argv[++i];
 		else if (!strcmp(argv[i], "-c")) ch8 = argv[++i];
 		else if (!strcmp(argv[i], "-b")) bin = argv[++i];
+		else if (!strcmp(argv[i], "-R")) osd_rom = argv[++i];
 		else if (!strcmp(argv[i], "-k")) { for (char *k = argv[++i]; *k; k++) keys |= 1u << strtol((char[]){*k, 0}, nullptr, 16); }
 		else if (!strcmp(argv[i], "-f")) frames = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-r")) release = atoi(argv[++i]);
@@ -95,6 +97,15 @@ int main(int argc, char **argv)
 	for (int i = 0; i < 64; i++) tick();
 
 	download(0x00, load(rom));
+	if (osd_rom) {
+		// As on the MiSTer: the stock ROM runs first, then the OSD load
+		top->keypad = keys;
+		top->reset = 0;
+		long pre = getenv("PRE") ? atol(getenv("PRE")) : 0;
+		for (long i = 0; i < pre * 29344L * cediv; i++) tick();
+		top->reset = 1;
+		download(0x43, load(osd_rom));
+	}
 	if (interp) download(0x40, load(interp));
 	if (bin) {
 		auto b = load(bin);

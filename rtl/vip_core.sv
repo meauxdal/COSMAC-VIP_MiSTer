@@ -65,7 +65,9 @@ module vip_core
 // 0x80 boot2.rom = CHIP-8X interpreter (768 bytes, VP-590/595 manual ch. II),
 // 1 = .CH8 (RAM 0200), 4 = .C8X (RAM 0300): the matching interpreter is copied
 // to 0000 afterwards, as if loaded from tape first. 2 = .BIN (RAM 0000).
-wire ld_rom      = ioctl_index == 8'h00 || ioctl_index == 8'h03;
+// Main puts the extension's position in the F entry's list in bits 7:6, so
+// the OSD ROM entry (ROM,BIN) arrives as 0x03 for .ROM and 0x43 for .BIN.
+wire ld_rom      = ioctl_index == 8'h00 || ioctl_index[5:0] == 6'h03;
 wire ld_interp   = ioctl_index == 8'h40;
 wire ld_interp8x = ioctl_index == 8'h80;
 wire ld_ch8      = ioctl_index == 8'h01;
