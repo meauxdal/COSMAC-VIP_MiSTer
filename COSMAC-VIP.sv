@@ -76,12 +76,13 @@ localparam CONF_STR = {
 	"P1O[2:1],RAM,4K,2K,32K;",
 	"P1O[20:19],Color board,Auto,None,VP-590;",
 	"P1O[22:21],Sound board,Auto,None,VP-595;",
-	"P1O[27:23],Reset key,Auto,None,C (Monitor),0,1,2,3,4,5,6,7,8,9,A,B,D,E,F;",
 	"P1F3,ROMBIN,Load ROM (8000-FFFF);",
+	"P1-;",
+	"P1O[27:23],Reset key,Auto,None,C (Monitor),3 (Life),4 (Black Jack),A,D,E,F;",
+	"P1T[0],Reset;",
 	"-;",
 
 	// === RESET ===
-	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
 	"J1,Fire,Extra;",
 	"jn,A,B;",
@@ -178,8 +179,19 @@ end
 
 wire ce_cpu = ce_pix && &ce_div;
 
+// F3 is the RUN switch: held = RESET, released = RUN. Keypad keys held
+// through the release pick the boot path, as on a real VIP (C = monitor),
+// so this reset never adds the OSD "Reset key".
+reg run_sw = 0;
+reg ps2_old_rs = 0;
+always @(posedge clk_sys) begin
+	ps2_old_rs <= ps2_key[10];
+	if (ps2_old_rs != ps2_key[10] && !ps2_key[8] && ps2_key[7:0] == 8'h04)
+		run_sw <= ps2_key[9];
+end
+
 // RUN switch down while any reset source is active
-wire reset = RESET | status[0] | buttons[1] | ioctl_download;
+wire reset = RESET | status[0] | buttons[1] | ioctl_download | run_sw;
 
 ///////////////////////   KEYPAD   ///////////////////////////////
 
@@ -240,11 +252,16 @@ end
 
 // The VIP enters the monitor only if key C is held when RUN goes up, and ROMs
 // such as J-VIP pick other boot paths by other held keys. The OSD swallows
-// keys, so the core holds one key for ~0.25 s after a reset. "Reset key":
+// keys, so the core holds one key for ~0.25 s after a reset (not the F3 RUN
+// switch, where the player holds the keys). "Reset key":
 //   Auto:   C until a CH8/C8X/BIN is loaded, then none, until the core is
 //           reloaded
 //   None:   never hold a key (run the program in RAM)
-//   C, 0-F: always hold that key, except on the reset of a program load
+//   C, 3, 4, A, D, E, F: always hold that key, except on the reset of a
+//           program load. Only keys a known ROM uses are listed: J-VIP 3 =
+//           Life, 4 = Black Jack, A/E/F = copy CHIP-8 (with Pinball / Animal
+//           Race) to RAM, D = serial monitor. The field keeps 5 bits so more
+//           keys can be appended without moving saved settings.
 // The reset that ends a program load always starts the program, like a real
 // VIP reset without C.
 wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02 ||
@@ -252,14 +269,24 @@ wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index
 reg        prog_loaded = 0;
 always @(posedge clk_sys) if (ld_prog) prog_loaded <= 1;
 
-// OSD index: 0 Auto, 1 None, 2 C, 3-17 keys 0-B then D-F (C skipped)
+// OSD index: 0 Auto, 1 None, 2 C, 3 '3', 4 '4', 5 A, 6 D, 7 E, 8 F
 wire [4:0] reset_key = status[27:23];
-wire [4:0] key_idx   = reset_key - 5'd3;
-wire [3:0] hold_key  = reset_key <= 5'd2 ? 4'hC : key_idx[3:0] + (key_idx >= 5'd12);
+reg  [3:0] hold_key;
+always @(*) begin
+	case (reset_key)
+		5'd3:    hold_key = 4'h3;
+		5'd4:    hold_key = 4'h4;
+		5'd5:    hold_key = 4'hA;
+		5'd6:    hold_key = 4'hD;
+		5'd7:    hold_key = 4'hE;
+		5'd8:    hold_key = 4'hF;
+		default: hold_key = 4'hC;
+	endcase
+end
 wire       hold_en   = !ld_prog && reset_key != 5'd1 && !(reset_key == 5'd0 && prog_loaded);
 reg [18:0] hold = 0;
 always @(posedge clk_sys) begin
-	if (reset) hold <= hold_en ? 19'h7FFFF : 19'd0;
+	if (reset) hold <= hold_en && !run_sw ? 19'h7FFFF : 19'd0;
 	else if (ce_cpu && hold) hold <= hold - 1'd1;
 end
 
