@@ -144,36 +144,91 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 
 ///////////////////////   CLOCKS   ///////////////////////////////
 
-// 28.17024 MHz = 8x the 3.52128 MHz crystal; CPU and 1861 run at crystal / 2.
-wire clk_sys;
+// clk_sys is 8x the CPU clock: 28.17024 MHz on a plain VIP (3.52128 MHz
+// crystal / 2), 28.636364 MHz with the VP-590, whose 1862 drives the bus
+// CLOCK line at 7.15909 MHz / 4. Keeping the pixel enable at exactly every 4th
+// clk_sys holds the OSD steady: it draws on clk_video with a fixed pixel
+// length, and a jittery CE_PIXEL makes the scaler sample its edges unevenly.
+// The PLL's fractional M (K) is rewritten through pll_cfg when the board
+// changes; M 8, N 1, C 15 stay, so VCO = 50 MHz * (8 + K / 2^32).
+localparam [31:0] K_VIP = 32'd1937339402;   // VCO 422.5536 MHz
+localparam [31:0] K_590 = 32'd2537935220;   // VCO 429.5455 MHz
+
+wire        clk_sys;
+wire [63:0] reconfig_to_pll, reconfig_from_pll;
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_sys)
+	.outclk_0(clk_sys),
+	.locked(),
+	.reconfig_to_pll(reconfig_to_pll),
+	.reconfig_from_pll(reconfig_from_pll)
 );
 
-// The pixel enable runs at 4x the CPU clock. A fractional accumulator sets the
-// rate: 3.52128 MHz / 2 on a plain VIP (exactly every 4th clk_sys, as before),
-// 7.15909 MHz / 4 = 1.7897725 MHz with the VP-590, whose 1862 drives the bus
-// CLOCK line. Increments are 4 * f_cpu / clk_sys over the modulus 2817024.
-localparam [21:0] CE_MOD     = 22'd2817024;
-localparam [21:0] CE_INC_VIP = 22'd704256;   // 1.76064 MHz
-localparam [21:0] CE_INC_590 = 22'd715909;   // 1.7897725 MHz
+wire        cfg_waitrequest;
+reg         cfg_write = 0;
+reg   [5:0] cfg_address = 0;
+reg  [31:0] cfg_data = 0;
 
-reg  [21:0] ce_acc = 0;
+pll_cfg pll_cfg
+(
+	.mgmt_clk(CLK_50M),
+	.mgmt_reset(0),
+	.mgmt_waitrequest(cfg_waitrequest),
+	.mgmt_read(0),
+	.mgmt_readdata(),
+	.mgmt_write(cfg_write),
+	.mgmt_address(cfg_address),
+	.mgmt_writedata(cfg_data),
+	.reconfig_to_pll(reconfig_to_pll),
+	.reconfig_from_pll(reconfig_from_pll)
+);
+
+// Board select into the CLK_50M domain; a write of K (reg 7) then start (2)
+reg   [2:0] col_s = 0;
+reg         col_pll = 0;        // the board the PLL is set for
+reg         col_tgt = 0;
+reg   [1:0] cfg_st = 0;
+always @(posedge CLK_50M) begin
+	col_s     <= {col_s[1:0], color_board};
+	cfg_write <= 0;
+	if (!cfg_waitrequest && !cfg_write) begin
+		case (cfg_st)
+			2'd0: if (col_s[2] != col_pll) begin
+				col_tgt     <= col_s[2];
+				cfg_address <= 6'd0;            // waitrequest mode
+				cfg_data    <= 32'd0;
+				cfg_write   <= 1;
+				cfg_st      <= 2'd1;
+			end
+			2'd1: begin
+				cfg_address <= 6'd7;
+				cfg_data    <= col_tgt ? K_590 : K_VIP;
+				cfg_write   <= 1;
+				cfg_st      <= 2'd2;
+			end
+			2'd2: begin
+				cfg_address <= 6'd2;
+				cfg_data    <= 32'd0;
+				cfg_write   <= 1;
+				cfg_st      <= 2'd3;
+			end
+			2'd3: begin
+				col_pll <= col_tgt;
+				cfg_st  <= 2'd0;
+			end
+		endcase
+	end
+end
+
+// Pixel enable every 4th clk_sys, the CPU every 4th pixel
+reg   [1:0] ce_cnt = 0;
 reg   [1:0] ce_div = 0;
 reg         ce_pix = 0;
-wire [21:0] ce_inc  = color_board ? CE_INC_590 : CE_INC_VIP;
-wire [22:0] ce_next = ce_acc + ce_inc;
-
 always @(posedge clk_sys) begin
-	ce_pix <= 0;
-	if (ce_next >= CE_MOD) begin
-		ce_acc <= ce_next - CE_MOD;
-		ce_pix <= 1;
-	end
-	else ce_acc <= ce_next[21:0];
+	ce_cnt <= ce_cnt + 1'd1;
+	ce_pix <= &ce_cnt;
 	if (ce_pix) ce_div <= ce_div + 1'd1;
 end
 
@@ -501,8 +556,7 @@ wire vid_hblank  = border_hide ? win_hblank : hblank;
 wire vid_vblank  = border_hide ? win_vblank : vblank;
 
 // ce_pix gives 4 samples per 1861 dot (384 px line). The scandoubler gets 2
-// (192 px): its pixel-length tracking needs more than the 3-4 clk_sys that
-// the fractional VP-590 rate leaves between ce_pix.
+// (192 px), which fits its LINE_LENGTH.
 wire ce_vid = forced_scandoubler ? (ce_pix & ce_div[0]) : ce_pix;
 wire vga_de;
 
