@@ -31,7 +31,7 @@ The firmware is RCA's and is not included. You need your own copies.
 
 - **Input**: Joystick profile, Keyboard (Hex keypads or ASCII).
 - **Video**: aspect ratio, scale, borders, vertical crop, crop offset, B/W palette.
-- **System**: RAM, Color board, Sound board, Load ROM, Reset key, Reset.
+- **System**: RAM, Color board, Sound board, Load ROM, Boot key, Reset.
 
 ## Boards
 
@@ -45,10 +45,11 @@ The firmware is RCA's and is not included. You need your own copies.
 A real VIP enters its monitor only if key C is held when the RUN switch goes up. ROMs such as J-VIP pick other programs by other held keys.
 
 - **F3** is the RUN switch: hold it for RESET, release it for RUN. Hold keypad keys through the release to pick the boot path, e.g. C for the monitor.
-- **Reset key** (System page) is the key the core holds for a moment after an OSD reset, since the OSD swallows keys:
+- **Boot key** (System page) is the key the core holds for a moment after an OSD reset, since the OSD swallows keys:
   - Auto: C until you load a program, then none.
   - None: never hold a key, so the program in RAM runs.
-  - C (Monitor), 3 (Life), 4 (Black Jack), A, D, E, F: always hold that key. The named ones are the J-VIP boot paths. A, E and F copy CHIP-8 (with Pinball or Animal Race) to RAM, and D is the serial monitor, which this core does not support yet.
+  - C (Monitor): always hold C, the stock VIP monitor.
+  - The J-VIP entries only do something with a J-VIP ROM loaded: 3 (Life), 4 (Black Jack), E (copy CHIP-8 to RAM), F (CHIP-8 with Pinball), A (CHIP-8 with Animal Race), and D (serial monitor, which needs a serial port the core does not have yet).
 
 The reset at the end of a program load always starts the program, like a real VIP reset without C.
 

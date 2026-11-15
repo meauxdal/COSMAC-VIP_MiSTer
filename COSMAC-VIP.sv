@@ -78,7 +78,7 @@ localparam CONF_STR = {
 	"P3O[22:21],Sound board,Auto,None,VP-595;",
 	"P3F3,ROMBIN,Load ROM (8000-FFFF);",
 	"P3-;",
-	"P3O[27:23],Reset key,Auto,None,C (Monitor),3 (Life),4 (Black Jack),A,D,E,F;",
+	"P3O[27:23],Boot key,Auto,None,C (Monitor),3 (J-VIP Life),4 (J-VIP Black Jack),A (J-VIP Animal Race),D (J-VIP Serial),E (J-VIP CHIP-8),F (J-VIP Pinball);",
 	"P3T[0],Reset;",
 	"-;",
 
@@ -236,7 +236,7 @@ wire ce_cpu = ce_pix && &ce_div;
 
 // F3 is the RUN switch: held = RESET, released = RUN. Keypad keys held
 // through the release pick the boot path, as on a real VIP (C = monitor),
-// so this reset never adds the OSD "Reset key".
+// so this reset never adds the OSD "Boot key".
 reg run_sw = 0;
 reg ps2_old_rs = 0;
 always @(posedge clk_sys) begin
@@ -308,15 +308,16 @@ end
 // The VIP enters the monitor only if key C is held when RUN goes up, and ROMs
 // such as J-VIP pick other boot paths by other held keys. The OSD swallows
 // keys, so the core holds one key for ~0.25 s after a reset (not the F3 RUN
-// switch, where the player holds the keys). "Reset key":
+// switch, where the player holds the keys). "Boot key":
 //   Auto:   C until a CH8/C8X/BIN is loaded, then none, until the core is
 //           reloaded
 //   None:   never hold a key (run the program in RAM)
 //   C, 3, 4, A, D, E, F: always hold that key, except on the reset of a
 //           program load. Only keys a known ROM uses are listed: J-VIP 3 =
-//           Life, 4 = Black Jack, A/E/F = copy CHIP-8 (with Pinball / Animal
-//           Race) to RAM, D = serial monitor. The field keeps 5 bits so more
-//           keys can be appended without moving saved settings.
+//           Life, 4 = Black Jack, E = copy CHIP-8 to RAM, F = with Pinball,
+//           A = with Animal Race, D = serial monitor (no serial port yet).
+//           The field keeps 5 bits so more keys can be appended without
+//           moving saved settings.
 // The reset that ends a program load always starts the program, like a real
 // VIP reset without C.
 wire       ld_prog = ioctl_download && (ioctl_index[7:0] == 8'h01 || ioctl_index[7:0] == 8'h02 ||
