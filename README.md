@@ -64,7 +64,7 @@ A S D F      J K L ;      7 8 9 E
 Z X C V      M , . /      A 0 B F
 ```
 
-With **Keyboard** set to ASCII, the PC keyboard is a VP-601/611 ASCII keyboard on the I/O port instead, and both keypads are off. Caps Lock toggles upper case only (on by default). Backspace sends 08 and Delete sends 7F. Ctrl follows the VP-601 table.
+With **Keyboard** set to ASCII, the PC keyboard is a VP-601/611 ASCII keyboard on the I/O port instead, and both keypads are off. Caps Lock toggles upper case only (on by default). Backspace sends 08 and Delete sends 7F. Ctrl follows the VP-601 table. VP-700 BASIC (32K RAM, Load Binary) runs this way: Backspace erases, and Delete moves the cursor forward.
 
 Joysticks 1 and 2 drive keypads 1 and 2 (OSD **Joystick**):
 
