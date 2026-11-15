@@ -68,7 +68,7 @@ localparam CONF_STR = {
 	"P2O[8:7],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"P2O[6],Borders,Show,Hide;",
 	"d0P2O[9],Vertical crop,Off,216p (5x);",
-	"d0P2O[13:10],Crop offset,0,2,4,6,8,10,12,-12,-10,-8,-6,-4,-2;",
+	"d0P2O[13:10],Crop offset,0,1,2,3,4,-4,-3,-2,-1;",
 	"D1P2O[15:14],B/W palette,White,Amber,Green,Inverted;",
 
 	// === SYSTEM ===
@@ -588,13 +588,12 @@ video_mixer #(.LINE_LENGTH(192), .GAMMA(1)) video_mixer
 );
 
 // 5x 216p crop at 1920x1080. With borders shown 224 lines are visible, so
-// 216 leaves 44 border lines above and below the 128-line bitmap. The offset
-// moves the window by -12 to +12 lines in steps of 2 (index 0-6 up from 0,
-// 7-12 from -12), like the Studio II core.
+// 216 leaves 44 border lines above and below the 128-line bitmap and the
+// offset can move the window by up to 4 lines.
 reg [4:0] crop_off = 0;
 always @(posedge CLK_VIDEO) begin
 	en216p   <= HDMI_WIDTH == 12'd1920 && HDMI_HEIGHT == 12'd1080 && !forced_scandoubler;
-	crop_off <= (status[13:10] < 4'd7) ? {status[13:10], 1'b0} : {status[13:10], 1'b0} - 5'd26;
+	crop_off <= (status[13:10] < 4'd5) ? {1'b0, status[13:10]} : {1'b0, status[13:10]} - 5'd9;
 end
 
 // VSync one pixel later, so the DE falling edge and the VSync rising edge
