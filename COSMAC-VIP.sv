@@ -57,29 +57,29 @@ localparam CONF_STR = {
 	"F2,BIN,Load Binary;",
 	"-;",
 
-	// === AUDIO & VIDEO ===
-	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"O[8:7],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
-	"O[6],Borders,Show,Hide;",
-	"d0O[9],Vertical crop,Off,216p (5x);",
-	"d0O[13:10],Crop offset,0,1,2,3,4,-4,-3,-2,-1;",
-	"D1O[15:14],B/W palette,White,Amber,Green,Inverted;",
-	"-;",
-
 	// === INPUT ===
-	"O[16],Joystick,8-way,CHIP-8;",
-	"O[18],Keyboard,Hex keypads,ASCII;",
-	"-;",
+	"P1,Input;",
+	"P1O[16],Joystick,8-way,CHIP-8;",
+	"P1O[18],Keyboard,Hex keypads,ASCII;",
+
+	// === VIDEO ===
+	"P2,Video;",
+	"P2O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
+	"P2O[8:7],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
+	"P2O[6],Borders,Show,Hide;",
+	"d0P2O[9],Vertical crop,Off,216p (5x);",
+	"d0P2O[13:10],Crop offset,0,2,4,6,8,10,12,-12,-10,-8,-6,-4,-2;",
+	"D1P2O[15:14],B/W palette,White,Amber,Green,Inverted;",
 
 	// === SYSTEM ===
-	"P1,System;",
-	"P1O[2:1],RAM,4K,2K,32K;",
-	"P1O[20:19],Color board,Auto,None,VP-590;",
-	"P1O[22:21],Sound board,Auto,None,VP-595;",
-	"P1F3,ROMBIN,Load ROM (8000-FFFF);",
-	"P1-;",
-	"P1O[27:23],Reset key,Auto,None,C (Monitor),3 (Life),4 (Black Jack),A,D,E,F;",
-	"P1T[0],Reset;",
+	"P3,System;",
+	"P3O[2:1],RAM,4K,2K,32K;",
+	"P3O[20:19],Color board,Auto,None,VP-590;",
+	"P3O[22:21],Sound board,Auto,None,VP-595;",
+	"P3F3,ROMBIN,Load ROM (8000-FFFF);",
+	"P3-;",
+	"P3O[27:23],Reset key,Auto,None,C (Monitor),3 (Life),4 (Black Jack),A,D,E,F;",
+	"P3T[0],Reset;",
 	"-;",
 
 	// === RESET ===
@@ -588,12 +588,13 @@ video_mixer #(.LINE_LENGTH(192), .GAMMA(1)) video_mixer
 );
 
 // 5x 216p crop at 1920x1080. With borders shown 224 lines are visible, so
-// 216 leaves 44 border lines above and below the 128-line bitmap and the
-// offset can move the window by up to 4 lines.
+// 216 leaves 44 border lines above and below the 128-line bitmap. The offset
+// moves the window by -12 to +12 lines in steps of 2 (index 0-6 up from 0,
+// 7-12 from -12), like the Studio II core.
 reg [4:0] crop_off = 0;
 always @(posedge CLK_VIDEO) begin
 	en216p   <= HDMI_WIDTH == 12'd1920 && HDMI_HEIGHT == 12'd1080 && !forced_scandoubler;
-	crop_off <= (status[13:10] < 4'd5) ? {1'b0, status[13:10]} : {1'b0, status[13:10]} - 5'd9;
+	crop_off <= (status[13:10] < 4'd7) ? {status[13:10], 1'b0} : {status[13:10], 1'b0} - 5'd26;
 end
 
 // VSync one pixel later, so the DE falling edge and the VSync rising edge
