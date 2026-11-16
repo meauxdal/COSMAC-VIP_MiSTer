@@ -76,6 +76,7 @@ localparam CONF_STR = {
 	"P3O[2:1],RAM,4K,2K,32K;",
 	"P3O[20:19],Color board,Auto,None,VP-590;",
 	"P3O[22:21],Sound board,Auto,None,VP-595;",
+	"P3O[28],Elf panel,Off,On;",
 	"P3F3,ROMBIN,Load ROM (8000-FFFF);",
 	"P3-;",
 	"P3O[27:23],Boot key,Auto,None,C (Monitor),3 (J-VIP Life),4 (J-VIP Black Jack),A (J-VIP Animal Race),D (J-VIP Serial),E (J-VIP CHIP-8),F (J-VIP Pinball);",
@@ -392,6 +393,8 @@ wire        exp_tpa, exp_tpb, exp_mrd_n, exp_mwr_n, exp_run;
 wire  [7:0] ram_bus;
 wire        ram_oe, ram_indis;
 wire        key2_ef4_n;
+wire  [7:0] elf_bus;
+wire        elf_oe, elf_ef4_n;
 wire        hsync, vsync, hblank, vblank, win_hblank, win_vblank;
 wire signed [7:0] audio;
 
@@ -421,13 +424,13 @@ vip_core vip_core
 	.exp_run(exp_run),
 	.exp_cs(),
 	.exp_cdef_n(),
-	.exp_bus_in(ram_bus),
-	.exp_bus_oe(ram_oe),
+	.exp_bus_in(elf_oe ? elf_bus : ram_bus),
+	.exp_bus_oe(ram_oe | elf_oe),
 	.exp_indis(ram_indis),
 	.exp_int_n(1'b1),
 	.exp_dma_in_n(1'b1),
 	.exp_dma_out_n(1'b1),
-	.exp_ef_n({ascii_kbd ? kbd_ef_n : key2_ef4_n, 3'b111}),
+	.exp_ef_n({(ascii_kbd ? kbd_ef_n : key2_ef4_n) & elf_ef4_n, 3'b111}),
 
 	.io_out(),
 	.io_in(kbd_data),
@@ -485,6 +488,38 @@ vp585 vp585
 	.n(exp_n),
 	.keypad_b(keys2),
 	.ef4_n(key2_ef4_n)
+);
+
+///////////////////////   ELF PANEL   ////////////////////////////
+
+// Optional COSMAC Elf port 4: hex LEDs on OUT 4, data switches on INP 4,
+// IN button on EF4, with an LED overlay. See rtl/elf_panel.sv.
+wire        elf_draw;
+wire [23:0] elf_rgb;
+
+elf_panel elf_panel
+(
+	.clk(clk_sys),
+	.ce(ce_cpu),
+	.ce_pix(ce_pix),
+	.enable(status[28]),
+	.tpb(exp_tpb),
+	.mrd_n(exp_mrd_n),
+	.bus(exp_bus),
+	.n(exp_n),
+	.bus_out(elf_bus),
+	.bus_oe(elf_oe),
+	.ef4_n(elf_ef4_n),
+	.keypad(keypad),
+	.ps2_key(ps2_key),
+	.q(q),
+	.hblank(hblank),
+	.vblank(vblank),
+	.win_hblank(win_hblank),
+	.win_vblank(win_vblank),
+	.border_hide(border_hide),
+	.draw(elf_draw),
+	.rgb(elf_rgb)
 );
 
 ///////////////////////   VP-595   ///////////////////////////////
@@ -550,7 +585,7 @@ wire [23:0] col_out = {col_rgb[2] ? col_on : 8'h00,
                        col_rgb[1] ? col_on : 8'h00,
                        col_rgb[0] ? col_on : 8'h00};
 wire [23:0] bw_out  = pixel ? bw_pal[47:24] : bw_pal[23:0];
-wire [23:0] rgb     = color_board ? col_out : bw_out;
+wire [23:0] rgb     = elf_draw ? elf_rgb : color_board ? col_out : bw_out;
 
 // Borders hidden: only the 64x128 bitmap window is displayed
 wire vid_hblank  = border_hide ? win_hblank : hblank;

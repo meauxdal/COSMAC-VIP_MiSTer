@@ -9,3 +9,4 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/vp595.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vip_core.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vip_joystick.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vip_ascii_kbd.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/elf_panel.sv

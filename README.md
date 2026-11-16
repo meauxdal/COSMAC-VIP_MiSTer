@@ -31,7 +31,7 @@ The firmware is RCA's and is not included. You need your own copies.
 
 - **Input**: Joystick profile, Keyboard (Hex keypads or ASCII).
 - **Video**: aspect ratio, scale, borders, vertical crop, crop offset, B/W palette.
-- **System**: RAM, Color board, Sound board, Load ROM, Boot key, Reset.
+- **System**: RAM, Color board, Sound board, Elf panel, Load ROM, Boot key, Reset.
 
 ## Boards
 
@@ -39,6 +39,7 @@ The firmware is RCA's and is not included. You need your own copies.
 - **Color board**: the VP-590. It also switches the CPU clock to the VP-590's 1.79 MHz, as on real hardware.
 - **Sound board**: the VP-595, a CDP1863 tone generator that replaces the on-board beeper.
 - **Auto** (Color board and Sound board): the board is fitted while the last program loaded was a `.c8x`, since CHIP-8X expects the VP-590 and VP-595, and removed after a `.ch8` or `.bin`.
+- **Elf panel** (off by default, not part of a real VIP): adds the COSMAC Elf's port 4 so Elf programs that use the front panel can run. OUT 4 shows a byte on two hex displays, INP 4 reads the eight data switches, and the IN button is on EF4. Set the switches Elf II style: each hex keypad key shifts its digit in (3 then A gives 3A). Enter is IN. An overlay shows the switches, the hex displays and a Q LED below the picture, or over its bottom edge when the borders are hidden.
 
 ## Reset and boot keys
 
