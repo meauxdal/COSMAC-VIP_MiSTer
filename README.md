@@ -7,8 +7,8 @@ Tester build. Expect rough edges and report them.
 ## Status
 
 - Working: CDP1802, CDP1861, 2K to 32K RAM, hex keypad, beeper, CHIP-8 (`.ch8`), CHIP-8X (`.c8x`) and binary (`.bin`) loading, a 32K ROM socket (J-VIP / VIP-S ROMs).
-- Expansion boards: VP-570 RAM, VP-580 second keypad (VP-585 interface), VP-590 color board, VP-595 sound board, VP-601/611 ASCII keyboard.
-- Not yet: VP-550/551 Super Sound, printer, cassette, serial.
+- Expansion boards: VP-570 RAM, VP-580 second keypad (VP-585 interface), VP-590 color board, VP-595 sound board, VIP Supersound card, VP-601/611 ASCII keyboard.
+- Not yet: the PAiA drum card for the Supersound, the 4-channel VP-551, printer, cassette, serial.
 
 ## Setup
 
@@ -31,13 +31,14 @@ The firmware is RCA's and is not included. You need your own copies.
 
 - **Input**: Joystick profile, Keyboard (Hex keypads or ASCII).
 - **Video**: aspect ratio, scale, borders, vertical crop, crop offset, B/W palette.
-- **System**: RAM, Color board, Sound board, Elf panel, Load ROM, Boot key, Reset.
+- **System**: RAM, Color board, Sound board, Tempo (Supersound only), Elf panel, Load ROM, Boot key, Reset.
 
 ## Boards
 
 - **RAM**: 4K (default), 8K, 16K, 32K, or 2K (stock). The VIP shipped with 2K on the board; RCA's VP-44 kit filled it to 4K. 8K, 16K and 32K add one, three or seven VP-570 4K boards from 1000 up. Changing RAM resets the machine, since the monitor sizes RAM at reset and CHIP-8 puts its display at the top of on-board RAM (0700 on 2K, 0F00 otherwise).
 - **Color board**: the VP-590. It also switches the CPU clock to the VP-590's 1.79 MHz, as on real hardware.
-- **Sound board**: the VP-595, a CDP1863 tone generator that replaces the on-board beeper.
+- **Sound board**: the VP-595, a CDP1863 tone generator that replaces the on-board beeper, or the Supersound.
+- **Supersound**: Joe Weisbecker's VIP Supersound card (July 1978), built from his schematic. RCA's later VP-550 Super Sound board appears to be the same design, but this hasn't been checked against a VP-550 manual. Two CDP1863 tone channels, each with a four-octave crossbar and 16 volume steps, written as memory at 8001-8030. A tempo oscillator interrupts the 1802; **Tempo** stands in for the card's knob (50-250 Hz). The manual says to disconnect the VIP speaker, so the beeper is silent while the card is fitted. Weisbecker's Pin-8 player and its tunes load as `.bin`. The PAiA drum card that Pin-8 drives from the output port isn't emulated.
 - **Auto** (Color board and Sound board): the board is fitted while the last program loaded was a `.c8x`, since CHIP-8X expects the VP-590 and VP-595, and removed after a `.ch8` or `.bin`.
 - **Elf panel** (off by default, not part of a real VIP): adds the COSMAC Elf's port 4 so Elf programs that use the front panel can run. OUT 4 shows a byte on two hex displays, INP 4 reads the eight data switches, and the IN button is on EF4. Set the switches Elf II style: each hex keypad key shifts its digit in (3 then A gives 3A). Enter is IN. An overlay shows the switches, the hex displays and a Q LED below the picture, or over its bottom edge when the borders are hidden.
 

@@ -75,7 +75,8 @@ localparam CONF_STR = {
 	"P3,System;",
 	"P3O[31:29],RAM,4K,8K,16K,32K,2K (stock);",
 	"P3O[20:19],Color board,Auto,None,VP-590;",
-	"P3O[22:21],Sound board,Auto,None,VP-595;",
+	"P3O[22:21],Sound board,Auto,None,VP-595,Supersound;",
+	"h2P3O[34:32],Tempo,50 Hz,75 Hz,100 Hz,125 Hz,150 Hz,175 Hz,200 Hz,250 Hz;",
 	"P3O[28],Elf panel,Off,On;",
 	"P3F3,ROMBIN,Load ROM (8000-FFFF);",
 	"P3-;",
@@ -115,6 +116,7 @@ always @(posedge clk_sys)
 
 wire         color_board = status[20:19] == 2'd0 ? c8x_mode : status[20:19] == 2'd2;
 wire         sound_board = status[22:21] == 2'd0 ? c8x_mode : status[22:21] == 2'd2;
+wire         supersound  = status[22:21] == 2'd3;
 wire         border_hide = status[6];
 reg          en216p = 0;
 
@@ -129,7 +131,7 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask({color_board, en216p && !border_hide}),
+	.status_menumask({supersound, color_board, en216p && !border_hide}),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
@@ -408,6 +410,9 @@ wire        vid_dma_stb, vid_disp_en;
 wire  [2:0] vid_dma_idx, vid_dot_idx;
 wire  [7:0] exp_ma, exp_bus;
 wire  [2:0] exp_n;
+wire  [1:0] exp_sc;
+wire        ss_int_n, ss_minh;
+wire signed [7:0] ss_audio;
 wire        exp_tpa, exp_tpb, exp_mrd_n, exp_mwr_n, exp_run;
 wire  [7:0] ram_bus;
 wire        ram_oe, ram_indis;
@@ -439,14 +444,14 @@ vip_core vip_core
 	.exp_mwr_n(exp_mwr_n),
 	.exp_bus(exp_bus),
 	.exp_n(exp_n),
-	.exp_sc(),
+	.exp_sc(exp_sc),
 	.exp_run(exp_run),
 	.exp_cs(),
 	.exp_cdef_n(),
 	.exp_bus_in(elf_oe ? elf_bus : ram_bus),
 	.exp_bus_oe(ram_oe | elf_oe),
-	.exp_indis(ram_indis),
-	.exp_int_n(1'b1),
+	.exp_indis(ram_indis | (supersound && ss_minh)),
+	.exp_int_n(!supersound || ss_int_n),
 	.exp_dma_in_n(1'b1),
 	.exp_dma_out_n(1'b1),
 	.exp_ef_n({(ascii_kbd ? kbd_ef_n : key2_ef4_n) & elf_ef4_n, 3'b111}),
@@ -556,6 +561,26 @@ vp595 vp595
 	.n(exp_n),
 	.q(q),
 	.audio(snd_audio)
+);
+
+///////////////////////   SUPERSOUND   ///////////////////////////
+
+supersound supersound_card
+(
+	.clk(clk_sys),
+	.ce(ce_cpu),
+	.run(exp_run),
+	.tempo(status[34:32]),
+	.ma(exp_ma),
+	.tpa(exp_tpa),
+	.tpb(exp_tpb),
+	.mwr_n(exp_mwr_n),
+	.bus(exp_bus),
+	.sc(exp_sc),
+	.q(q),
+	.int_n(ss_int_n),
+	.minh(ss_minh),
+	.audio(ss_audio)
 );
 
 ///////////////////////   VP-590   ///////////////////////////////
@@ -687,8 +712,10 @@ video_freak video_freak
 
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = 0;
-// The VP-595 replaces the on-board tone
-wire signed [7:0] audio_out = sound_board ? snd_audio : audio;
+// The VP-595 replaces the on-board tone. The Supersound manual says to
+// disconnect the VIP speaker, so the on-board tone goes with it.
+wire signed [7:0] audio_out = supersound  ? ss_audio  :
+                              sound_board ? snd_audio : audio;
 
 assign AUDIO_L   = {audio_out, 8'd0};
 assign AUDIO_R   = {audio_out, 8'd0};
