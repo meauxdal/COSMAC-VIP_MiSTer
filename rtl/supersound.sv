@@ -37,7 +37,7 @@ module supersound
 	input               clk,             // clk_sys, 28.17024 MHz
 	input               ce,              // 1802 clock, 1.76064 MHz
 	input               run,
-	input         [2:0] tempo,           // OSD: 50 to 250 Hz
+	input         [2:0] tempo,           // OSD: 100 Hz at 0, see TEMPO
 
 	// Expansion interface
 	input         [7:0] ma,
@@ -118,14 +118,14 @@ localparam [24:0] OSC_MOD = 25'd28170240;   // clk_sys, one second
 reg [7:0] rate;
 always @(*) begin
 	case (tempo)
-		3'd0: rate = 8'd50;
-		3'd1: rate = 8'd75;
-		3'd2: rate = 8'd100;
-		3'd3: rate = 8'd125;
-		3'd4: rate = 8'd150;
-		3'd5: rate = 8'd175;
-		3'd6: rate = 8'd200;
-		default: rate = 8'd250;
+		3'd0: rate = 8'd100;               // default, as Emma 02
+		3'd1: rate = 8'd125;
+		3'd2: rate = 8'd150;
+		3'd3: rate = 8'd175;
+		3'd4: rate = 8'd200;
+		3'd5: rate = 8'd250;
+		3'd6: rate = 8'd50;
+		default: rate = 8'd75;
 	endcase
 end
 

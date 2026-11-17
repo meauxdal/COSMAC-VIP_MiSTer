@@ -76,7 +76,7 @@ localparam CONF_STR = {
 	"P3O[31:29],RAM,4K,8K,16K,32K,2K (stock);",
 	"P3O[20:19],Color board,Auto,None,VP-590;",
 	"P3O[22:21],Sound board,Auto,None,VP-595,Supersound;",
-	"h2P3O[34:32],Tempo,50 Hz,75 Hz,100 Hz,125 Hz,150 Hz,175 Hz,200 Hz,250 Hz;",
+	"h2P3O[34:32],Tempo,100 Hz,125 Hz,150 Hz,175 Hz,200 Hz,250 Hz,50 Hz,75 Hz;",
 	"P3O[28],Elf panel,Off,On;",
 	"P3F3,ROMBIN,Load ROM (8000-FFFF);",
 	"P3-;",
