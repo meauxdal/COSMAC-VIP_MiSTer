@@ -1,5 +1,6 @@
 // RCA VP-570 memory expansion: 4K RAM boards on the expansion interface, each
-// strapped to one 4K block. Seven of them at 1000-7FFF bring the VIP to 32K.
+// strapped to one 4K block. Boards fill 1000-7FFF upward from 1000: 1, 3 or 7
+// of them bring the VIP to 8K, 16K or 32K.
 // A selected board raises INDIS, which stops the on-board RAM from answering
 // at its mirrors.
 
@@ -7,7 +8,7 @@ module vp570
 (
 	input         clk,
 	input         ce,
-	input         enable,
+	input   [2:0] boards,        // number fitted, 0-7
 
 	input         ioctl_download,
 	input   [7:0] ioctl_index,
@@ -38,7 +39,7 @@ reg  [7:0] a_hi;
 always @(posedge clk) if (ce && tpa) a_hi <= ma;
 
 wire [14:0] addr = {a_hi[6:0], ma};
-wire        sel  = enable && !a_hi[7] && |a_hi[6:4];
+wire        sel  = !a_hi[7] && |a_hi[6:4] && a_hi[6:4] <= boards;
 
 // Block 0 stays unused: the on-board RAM holds 0000-0FFF
 reg [7:0] ram[32768];

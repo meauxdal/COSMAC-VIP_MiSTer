@@ -6,7 +6,7 @@ Tester build. Expect rough edges and report them.
 
 ## Status
 
-- Working: CDP1802, CDP1861, 2K/4K/32K RAM, hex keypad, beeper, CHIP-8 (`.ch8`), CHIP-8X (`.c8x`) and binary (`.bin`) loading, a 32K ROM socket (J-VIP / VIP-S ROMs).
+- Working: CDP1802, CDP1861, 2K to 32K RAM, hex keypad, beeper, CHIP-8 (`.ch8`), CHIP-8X (`.c8x`) and binary (`.bin`) loading, a 32K ROM socket (J-VIP / VIP-S ROMs).
 - Expansion boards: VP-570 RAM, VP-580 second keypad (VP-585 interface), VP-590 color board, VP-595 sound board, VP-601/611 ASCII keyboard.
 - Not yet: VP-550/551 Super Sound, printer, cassette, serial.
 
@@ -35,7 +35,7 @@ The firmware is RCA's and is not included. You need your own copies.
 
 ## Boards
 
-- **RAM**: 4K, 2K, or 32K. 32K adds seven VP-570 4K boards at 1000-7FFF.
+- **RAM**: 4K (default), 8K, 16K, 32K, or 2K (stock). The VIP shipped with 2K on the board; RCA's VP-44 kit filled it to 4K. 8K, 16K and 32K add one, three or seven VP-570 4K boards from 1000 up. Changing RAM resets the machine, since the monitor sizes RAM at reset and CHIP-8 puts its display at the top of on-board RAM (0700 on 2K, 0F00 otherwise).
 - **Color board**: the VP-590. It also switches the CPU clock to the VP-590's 1.79 MHz, as on real hardware.
 - **Sound board**: the VP-595, a CDP1863 tone generator that replaces the on-board beeper.
 - **Auto** (Color board and Sound board): the board is fitted while the last program loaded was a `.c8x`, since CHIP-8X expects the VP-590 and VP-595, and removed after a `.ch8` or `.bin`.

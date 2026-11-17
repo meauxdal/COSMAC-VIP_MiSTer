@@ -73,7 +73,7 @@ localparam CONF_STR = {
 
 	// === SYSTEM ===
 	"P3,System;",
-	"P3O[2:1],RAM,4K,2K,32K;",
+	"P3O[31:29],RAM,4K,8K,16K,32K,2K (stock);",
 	"P3O[20:19],Color board,Auto,None,VP-590;",
 	"P3O[22:21],Sound board,Auto,None,VP-595;",
 	"P3O[28],Elf panel,Off,On;",
@@ -246,8 +246,27 @@ always @(posedge clk_sys) begin
 		run_sw <= ps2_key[9];
 end
 
+// RAM (status[31:29], [2:1] retired): 4K on the board (VP-44 fitted) plus
+// 0, 1, 3 or 7 VP-570 4K boards for 4K, 8K, 16K, 32K, or the stock 2K
+// board with no VP-44. The monitor sizes on-board RAM at reset (probing
+// 0FFF down in 1K steps) and CHIP-8 puts its display in the top page found,
+// so a change resets the machine (about 2 ms).
+wire [2:0] ram_cfg   = status[31:29];
+wire       ram_2k    = ram_cfg == 3'd4;
+wire [2:0] vp570_cnt = ram_cfg == 3'd1 ? 3'd1 :
+                       ram_cfg == 3'd2 ? 3'd3 :
+                       ram_cfg == 3'd3 ? 3'd7 : 3'd0;
+
+reg  [2:0] ram_cfg_q = 0;
+reg [15:0] ram_rst   = 0;
+always @(posedge clk_sys) begin
+	ram_cfg_q <= ram_cfg;
+	if (ram_cfg_q != ram_cfg) ram_rst <= 16'hFFFF;
+	else if (ram_rst)         ram_rst <= ram_rst - 1'd1;
+end
+
 // RUN switch down while any reset source is active
-wire reset = RESET | status[0] | buttons[1] | ioctl_download | run_sw;
+wire reset = RESET | status[0] | buttons[1] | ioctl_download | run_sw | (|ram_rst);
 
 ///////////////////////   KEYPAD   ///////////////////////////////
 
@@ -403,7 +422,7 @@ vip_core vip_core
 	.clk(clk_sys),
 	.ce(ce_cpu),
 	.reset(reset),
-	.ram_2k(status[2:1] == 2'd1),
+	.ram_2k(ram_2k),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index[7:0]),
@@ -458,7 +477,7 @@ vp570 vp570
 (
 	.clk(clk_sys),
 	.ce(ce_cpu),
-	.enable(status[2:1] == 2'd2),
+	.boards(vp570_cnt),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index[7:0]),
