@@ -31,8 +31,17 @@
 // is high (the interrupt cycle, and DMA cycles too) or RUN is low. With the
 // gate low the oscillator output idles low, and opening the gate drives it
 // high at once, so the first interrupt comes straight away.
+//
+// Four voices (VP-551): a second card latches MA6 (A14) instead of MA7, so
+// its registers answer at 4001-4030 for channels C and D. That is how the
+// four-channel Pin-8 drives it (Emma 02 v2.00 data/Vip/pin-8.4ch.ram) and
+// how Emma 02 maps it (xmlemu.cpp, SOUND_SUPER_VP551). Pin-8 only uses the
+// tempo at 8030, so the second card's interrupt is left unconnected. Its
+// A14 latch drives MINH for 4000-7FFF and C000-FFFF; a VP-570 board fitted
+// there still answers, so 32K works, as long as the program keeps its data
+// away from the card's addresses.
 
-module supersound
+module supersound #(parameter ABIT = 7)  // MA bit latched at TPA: 7 = 8xxx
 (
 	input               clk,             // clk_sys, 28.17024 MHz
 	input               ce,              // 1802 clock, 1.76064 MHz
@@ -55,8 +64,8 @@ module supersound
 
 ///////////////////////   DECODE   ///////////////////////////////
 
-reg a15 = 0;
-always @(posedge clk) if (ce && tpa) a15 <= ma[7];
+reg a15 = 0;                           // A14 on the second card
+always @(posedge clk) if (ce && tpa) a15 <= ma[ABIT];
 
 wire wr       = ce && tpb && !mwr_n && a15;
 wire set_afrq = wr && ma[1:0] == 2'd1;

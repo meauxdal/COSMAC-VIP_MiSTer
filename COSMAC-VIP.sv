@@ -76,6 +76,7 @@ localparam CONF_STR = {
 	"P3O[31:29],RAM,4K,8K,16K,32K,2K (stock);",
 	"P3O[20:19],Color board,Auto,None,VP-590;",
 	"P3O[22:21],Sound board,Auto,None,VP-595,Supersound;",
+	"h2P3O[35],Voices,2,4 (VP-551);",
 	"h2P3O[34:32],Tempo,100 Hz,125 Hz,150 Hz,175 Hz,200 Hz,250 Hz,50 Hz,75 Hz;",
 	"P3O[28],Elf panel,Off,On;",
 	"P3F3,ROMBIN,Load ROM (8000-FFFF);",
@@ -117,6 +118,7 @@ always @(posedge clk_sys)
 wire         color_board = status[20:19] == 2'd0 ? c8x_mode : status[20:19] == 2'd2;
 wire         sound_board = status[22:21] == 2'd0 ? c8x_mode : status[22:21] == 2'd2;
 wire         supersound  = status[22:21] == 2'd3;
+wire         ss_four     = supersound && status[35];
 wire         border_hide = status[6];
 reg          en216p = 0;
 
@@ -411,8 +413,8 @@ wire  [2:0] vid_dma_idx, vid_dot_idx;
 wire  [7:0] exp_ma, exp_bus;
 wire  [2:0] exp_n;
 wire  [1:0] exp_sc;
-wire        ss_int_n, ss_minh;
-wire signed [7:0] ss_audio;
+wire        ss_int_n, ss_minh, ss2_minh;
+wire signed [7:0] ss_audio, ss2_audio;
 wire        exp_tpa, exp_tpb, exp_mrd_n, exp_mwr_n, exp_run;
 wire  [7:0] ram_bus;
 wire        ram_oe, ram_indis;
@@ -450,7 +452,7 @@ vip_core vip_core
 	.exp_cdef_n(),
 	.exp_bus_in(elf_oe ? elf_bus : ram_bus),
 	.exp_bus_oe(ram_oe | elf_oe),
-	.exp_indis(ram_indis | (supersound && ss_minh)),
+	.exp_indis(ram_indis | (supersound && ss_minh) | (ss_four && ss2_minh)),
 	.exp_int_n(!supersound || ss_int_n),
 	.exp_dma_in_n(1'b1),
 	.exp_dma_out_n(1'b1),
@@ -581,6 +583,25 @@ supersound supersound_card
 	.int_n(ss_int_n),
 	.minh(ss_minh),
 	.audio(ss_audio)
+);
+
+// Second card for four voices (VP-551): channels C and D at 4xxx
+supersound #(.ABIT(6)) supersound_card2
+(
+	.clk(clk_sys),
+	.ce(ce_cpu),
+	.run(exp_run),
+	.tempo(status[34:32]),
+	.ma(exp_ma),
+	.tpa(exp_tpa),
+	.tpb(exp_tpb),
+	.mwr_n(exp_mwr_n),
+	.bus(exp_bus),
+	.sc(exp_sc),
+	.q(q),
+	.int_n(),
+	.minh(ss2_minh),
+	.audio(ss2_audio)
 );
 
 ///////////////////////   VP-590   ///////////////////////////////
@@ -714,11 +735,14 @@ assign AUDIO_S   = 1;
 assign AUDIO_MIX = 0;
 // The VP-595 replaces the on-board tone. The Supersound manual says to
 // disconnect the VIP speaker, so the on-board tone goes with it.
-wire signed [7:0] audio_out = supersound  ? ss_audio  :
+// Nine bits so four Supersound voices (+/-240) fit; one card or board alone
+// keeps the level it had at eight bits.
+wire signed [7:0] audio_one = supersound  ? ss_audio  :
                               sound_board ? snd_audio : audio;
+wire signed [8:0] audio_out = ss_four ? ss_audio + ss2_audio : $signed({audio_one, 1'b0});
 
-assign AUDIO_L   = {audio_out, 8'd0};
-assign AUDIO_R   = {audio_out, 8'd0};
+assign AUDIO_L   = {audio_out, 7'd0};
+assign AUDIO_R   = {audio_out, 7'd0};
 
 assign LED_USER = q;
 
